@@ -15,26 +15,47 @@
 
 from oslo_log import log as logging
 
-from kuryr_kubernetes import exceptions
+from kuryr_kubernetes import config
 from kuryr_kubernetes.controller.drivers import base
+from kuryr_kubernetes import exceptions
 from kuryr_kubernetes import utils
 
 LOG = logging.getLogger(__name__)
 
 
-class ExternalPodSubnetDriver(base.PodSubnetsDriver):
-    """Provides subnet for Pod port based on an external API."""
+class CIDRPodSubnetDriver(base.PodSubnetsDriver):
+    """Provides subnet for Pod port based on pod_net_cidr option."""
 
     def get_subnets(self, pod, project_id):
-        LOG.debug("ExternalPodSubnetDriver: pod: %s, project_id: %s",
+        LOG.debug("CIDRPodSubnetDriver: pod: %s, project_id: %s",
                   pod['metadata']['name'], project_id)
 
         subnet_id = utils.get_subnet_id(
-            project_id=project_id, cidr="11.1.0.0/16")
+            project_id=project_id,
+            cidr=config.CONF.neutron_defaults.pod_net_cidr)
 
         if not subnet_id:
             raise exceptions.ResourceNotReady(
                 "subnet of project %s" % (project_id,))
-        LOG.debug("ExternalPodSubnetDriver: subnet_id: %s",
+        LOG.debug("CIDRPodSubnetDriver: subnet_id: %s",
+                  subnet_id)
+        return {subnet_id: utils.get_subnet(subnet_id)}
+
+
+class CIDRServiceSubnetDriver(base.ServiceSubnetsDriver):
+    """Provides subnet for Service's LBaaS based on svc_net_cidr option."""
+
+    def get_subnets(self, service, project_id):
+        LOG.debug("CIDRServiceSubnetDriver: svc: %s, project_id: %s",
+                  service['metadata']['name'], project_id)
+
+        subnet_id = utils.get_subnet_id(
+            project_id=project_id,
+            cidr=config.CONF.neutron_defaults.svc_net_cidr)
+
+        if not subnet_id:
+            raise exceptions.ResourceNotReady(
+                "subnet of project %s" % (project_id,))
+        LOG.debug("CIDRServiceSubnetDriver: subnet_id: %s",
                   subnet_id)
         return {subnet_id: utils.get_subnet(subnet_id)}
