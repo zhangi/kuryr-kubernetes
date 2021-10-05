@@ -36,7 +36,7 @@ class NamedPodSecurityGroupsDriver(base.PodSecurityGroupsDriver):
             project_id=project_id))
         sg_id_list = list(sg.id for sg in sg_list)
         LOG.debug("NamedPodSecurityGroupsDriver: sg_list: %s", sg_id_list)
-        return
+        return sg_id_list
 
     def create_sg_rules(self, pod):
         LOG.debug("Security group driver does not create SG rules for "
@@ -77,4 +77,4 @@ class NamedServiceSecurityGroupsDriver(base.ServiceSecurityGroupsDriver):
             project_id=project_id))
         sg_id_list = list(sg.id for sg in sg_list)
         LOG.debug("NamedServiceSecurityGroupsDriver: sg_list: %s", sg_id_list)
-        return
+        return sg_id_list
