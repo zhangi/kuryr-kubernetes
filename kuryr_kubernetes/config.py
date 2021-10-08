@@ -248,6 +248,9 @@ neutron_defaults = [
                help=_("CIDR of svc net")),
     cfg.StrOpt('pod_security_group_name',
                help=_("Security group name of pod")),
+    cfg.BoolOpt('use_kolla_ovs_vsctl',
+                help=_('Use ovs-vsctl in kolla docker'),
+                default=False),
 ]
 
 octavia_defaults = [

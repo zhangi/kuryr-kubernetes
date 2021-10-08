@@ -19,6 +19,7 @@
 
 """ Implements linux net utils"""
 
+from kuryr_kubernetes import config
 from oslo_concurrency import processutils
 from oslo_log import log as logging
 
@@ -27,6 +28,8 @@ LOG = logging.getLogger(__name__)
 
 def _ovs_vsctl(args, timeout=None):
     full_args = ['ovs-vsctl']
+    if config.CONF.neutron_defaults.use_kolla_ovs_vsctl:
+        full_args = ['docker exec openvswitch_vswitchd ovs-vsctl']
     if timeout is not None:
         full_args += ['--timeout=%s' % timeout]
     full_args += args
