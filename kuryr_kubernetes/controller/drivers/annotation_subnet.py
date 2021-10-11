@@ -39,7 +39,7 @@ class AnnotationPodSubnetDriver(base.PodSubnetsDriver):
             return {subnet_id: utils.get_subnet(subnet_id)}
 
         os_net = clients.get_network_client()
-        subnet = os_net.find_network(subnet_id)
+        subnet = os_net.find_subnet(subnet_id)
         if not subnet:
             raise exceptions.ResourceNotReady(
                 "subnet: %s" % (subnet_id,))
@@ -64,7 +64,7 @@ class AnnotationServiceSubnetDriver(base.ServiceSubnetsDriver):
             return {subnet_id: utils.get_subnet(subnet_id)}
 
         os_net = clients.get_network_client()
-        subnet = os_net.find_network(subnet_id)
+        subnet = os_net.find_subnet(subnet_id)
 
         if not subnet:
             raise exceptions.ResourceNotReady(
