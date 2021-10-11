@@ -32,10 +32,11 @@ class AnnotationPodSecurityGroupsDriver(base.PodSecurityGroupsDriver):
 
         annotations = pod['metadata']['annotations']
         os_net = clients.get_network_client()
-        sg_list = list(os_net.security_groups(
-            id=annotations[constants.K8S_ANNOTATION_SECGROUP],
-            project_id=project_id))
-        sg_id_list = list(sg.id for sg in sg_list)
+        sg = os_net.find_security_group(
+            id=annotations[constants.K8S_ANNOTATION_SECGROUP])
+        sg_id_list = []
+        if sg:
+            sg_id_list.append(sg.id)
         LOG.debug("AnnotationPodSecurityGroupsDriver: sg_list: %s", sg_id_list)
         return sg_id_list
 
@@ -74,10 +75,12 @@ class AnnotationServiceSecurityGroupsDriver(base.ServiceSecurityGroupsDriver):
 
         annotations = service['metadata']['annotations']
         os_net = clients.get_network_client()
-        sg_list = list(os_net.security_groups(
-            id=annotations[constants.K8S_ANNOTATION_SECGROUP],
-            project_id=project_id))
-        sg_id_list = list(sg.id for sg in sg_list)
-        LOG.debug("AnnotationServiceSecurityGroupsDriver: sg_list: %s",
-                  sg_id_list)
+        sg = os_net.find_security_group(
+            id=annotations[constants.K8S_ANNOTATION_SECGROUP])
+
+        sg_id_list = []
+        if sg:
+            sg_id_list.append(sg.id)
+        LOG.debug("AnnotationServiceSecurityGroupsDriver: sg: %s",
+                  sg)
         return sg_id_list
