@@ -31,16 +31,15 @@ class AnnotationPodSubnetDriver(base.PodSubnetsDriver):
                   pod['metadata']['name'], pod['metadata']['annotations'])
 
         annotations = pod['metadata']['annotations']
-        subnet_id = utils.get_subnet_id(
-            project_id=project_id,
+        subnet = utils.find_network(
             id=annotations[constants.K8S_ANNOTATION_SUBNET])
 
-        if not subnet_id:
+        if not subnet:
             raise exceptions.ResourceNotReady(
                 "subnet of project %s" % (project_id,))
-        LOG.debug("CIDRPodSubnetDriver: subnet_id: %s",
-                  subnet_id)
-        return {subnet_id: utils.get_subnet(subnet_id)}
+        LOG.debug("AnnotationPodSubnetDriver: subnet_id: %s",
+                  subnet.id)
+        return {subnet.id: utils.get_subnet(subnet.id)}
 
 
 class AnnotationServiceSubnetDriver(base.ServiceSubnetsDriver):
@@ -51,13 +50,12 @@ class AnnotationServiceSubnetDriver(base.ServiceSubnetsDriver):
                   service['metadata']['name'], project_id)
 
         annotations = service['metadata']['annotations']
-        subnet_id = utils.get_subnet_id(
-            project_id=project_id,
+        subnet = utils.find_network(
             id=annotations[constants.K8S_ANNOTATION_SUBNET])
 
-        if not subnet_id:
+        if not subnet.id:
             raise exceptions.ResourceNotReady(
                 "subnet of project %s" % (project_id,))
         LOG.debug("AnnotationServiceSubnetDriver: subnet_id: %s",
-                  subnet_id)
-        return {subnet_id: utils.get_subnet(subnet_id)}
+                  subnet.id)
+        return {subnet.id: utils.get_subnet(subnet.id)}
