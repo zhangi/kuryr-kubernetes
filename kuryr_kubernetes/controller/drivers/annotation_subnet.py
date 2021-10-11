@@ -34,7 +34,7 @@ class AnnotationPodSubnetDriver(base.PodSubnetsDriver):
         annotations = pod['metadata']['annotations']
         os_net = clients.get_network_client()
         subnet = os_net.find_network(
-            id=annotations[constants.K8S_ANNOTATION_SUBNET])
+            annotations[constants.K8S_ANNOTATION_SUBNET])
 
         if not subnet:
             raise exceptions.ResourceNotReady(
@@ -54,7 +54,7 @@ class AnnotationServiceSubnetDriver(base.ServiceSubnetsDriver):
         annotations = service['metadata']['annotations']
         os_net = clients.get_network_client()
         subnet = os_net.find_network(
-            id=annotations[constants.K8S_ANNOTATION_SUBNET])
+            annotations[constants.K8S_ANNOTATION_SUBNET])
 
         if not subnet.id:
             raise exceptions.ResourceNotReady(
