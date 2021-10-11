@@ -15,6 +15,7 @@
 
 from oslo_log import log as logging
 
+from kuryr_kubernetes import clients
 from kuryr_kubernetes import constants
 from kuryr_kubernetes.controller.drivers import base
 from kuryr_kubernetes import exceptions
@@ -31,7 +32,8 @@ class AnnotationPodSubnetDriver(base.PodSubnetsDriver):
                   pod['metadata']['name'], pod['metadata']['annotations'])
 
         annotations = pod['metadata']['annotations']
-        subnet = utils.find_network(
+        os_net = clients.get_network_client()
+        subnet = os_net.find_network(
             id=annotations[constants.K8S_ANNOTATION_SUBNET])
 
         if not subnet:
@@ -50,7 +52,8 @@ class AnnotationServiceSubnetDriver(base.ServiceSubnetsDriver):
                   service['metadata']['name'], project_id)
 
         annotations = service['metadata']['annotations']
-        subnet = utils.find_network(
+        os_net = clients.get_network_client()
+        subnet = os_net.find_network(
             id=annotations[constants.K8S_ANNOTATION_SUBNET])
 
         if not subnet.id:
