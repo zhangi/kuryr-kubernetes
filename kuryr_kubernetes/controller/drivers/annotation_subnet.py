@@ -16,6 +16,7 @@
 from oslo_log import log as logging
 
 from kuryr_kubernetes import clients
+from kuryr_kubernetes import config
 from kuryr_kubernetes import constants
 from kuryr_kubernetes.controller.drivers import base
 from kuryr_kubernetes import exceptions
@@ -29,16 +30,19 @@ class AnnotationPodSubnetDriver(base.PodSubnetsDriver):
 
     def get_subnets(self, pod, project_id):
         LOG.debug("AnnotationPodSubnetDriver: pod: %s, annotations: %s",
-                  pod['metadata']['name'], pod['metadata']['annotations'])
+                  pod['metadata']['name'], pod['metadata'].get('annotations'))
+        subnet_id = config.CONF.neutron_defaults.pod_subnet
+        try:
+            annotations = pod['metadata']['annotations']
+            subnet_id = annotations[constants.K8S_ANNOTATION_SUBNET]
+        except KeyError:
+            return {subnet_id: utils.get_subnet(subnet_id)}
 
-        annotations = pod['metadata']['annotations']
         os_net = clients.get_network_client()
-        subnet = os_net.find_network(
-            annotations[constants.K8S_ANNOTATION_SUBNET])
-
+        subnet = os_net.find_network(subnet_id)
         if not subnet:
             raise exceptions.ResourceNotReady(
-                "subnet of project %s" % (project_id,))
+                "subnet: %s" % (subnet_id,))
         LOG.debug("AnnotationPodSubnetDriver: subnet_id: %s",
                   subnet.id)
         return {subnet.id: utils.get_subnet(subnet.id)}
@@ -48,17 +52,23 @@ class AnnotationServiceSubnetDriver(base.ServiceSubnetsDriver):
     """Provides subnet for Service's LBaaS based on annotation."""
 
     def get_subnets(self, service, project_id):
-        LOG.debug("AnnotationServiceSubnetDriver: svc: %s, project_id: %s",
-                  service['metadata']['name'], project_id)
+        LOG.debug("AnnotationServiceSubnetDriver: svc: %s, annotation: %s",
+                  service['metadata']['name'],
+                  service['metadata'].get('annotation'))
 
-        annotations = service['metadata']['annotations']
+        subnet_id = config.CONF.neutron_defaults.service_subnet
+        try:
+            annotations = service['metadata']['annotations']
+            subnet_id = annotations[constants.K8S_ANNOTATION_SUBNET]
+        except KeyError:
+            return {subnet_id: utils.get_subnet(subnet_id)}
+
         os_net = clients.get_network_client()
-        subnet = os_net.find_network(
-            annotations[constants.K8S_ANNOTATION_SUBNET])
+        subnet = os_net.find_network(subnet_id)
 
-        if not subnet.id:
+        if not subnet:
             raise exceptions.ResourceNotReady(
-                "subnet of project %s" % (project_id,))
+                "subnet: %s" % (subnet_id,))
         LOG.debug("AnnotationServiceSubnetDriver: subnet_id: %s",
                   subnet.id)
         return {subnet.id: utils.get_subnet(subnet.id)}

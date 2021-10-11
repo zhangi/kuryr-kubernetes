@@ -16,6 +16,7 @@
 from oslo_log import log as logging
 
 from kuryr_kubernetes import clients
+from kuryr_kubernetes import config
 from kuryr_kubernetes import constants
 from kuryr_kubernetes.controller.drivers import base
 
@@ -28,16 +29,20 @@ class AnnotationPodSecurityGroupsDriver(base.PodSecurityGroupsDriver):
     def get_security_groups(self, pod, project_id):
         LOG.debug(
             "AnnotationPodSecurityGroupsDriver: pod: %s, annotations: %s",
-            pod['metadata']['name'], pod['metadata']['annotations'])
+            pod['metadata']['name'], pod['metadata'].get('annotations'))
 
-        annotations = pod['metadata']['annotations']
+        sg_id_list = list(config.CONF.neutron_defaults.pod_security_groups)
         os_net = clients.get_network_client()
-        sg = os_net.find_security_group(
-            annotations[constants.K8S_ANNOTATION_SECGROUP])
-        sg_id_list = []
+        try:
+            annotations = pod['metadata']['annotations']
+            sg_id = annotations[constants.K8S_ANNOTATION_SECGROUP]
+        except KeyError:
+            return sg_id_list
+        sg = os_net.find_security_group(sg_id)
         if sg:
-            sg_id_list.append(sg.id)
-        LOG.debug("AnnotationPodSecurityGroupsDriver: sg_list: %s", sg_id_list)
+            sg_id_list = [sg.id]
+        LOG.debug("AnnotationPodSecurityGroupsDriver: sg_id_list: %s",
+                  sg_id_list)
         return sg_id_list
 
     def create_sg_rules(self, pod):
@@ -70,17 +75,22 @@ class AnnotationServiceSecurityGroupsDriver(base.ServiceSecurityGroupsDriver):
 
     def get_security_groups(self, service, project_id):
         LOG.debug(
-            "AnnotationServiceSecurityGroupsDriver: svc: %s, annotations: %s",
-            service['metadata']['name'], service['metadata']['annotations'])
+            "AnnotationServiceSecurityGroupsDriver: "
+            "svc: %s, "
+            "annotations: %s",
+            service['metadata']['name'],
+            service['metadata'].get('annotations'))
+        sg_id_list = list(config.CONF.neutron_defaults.pod_security_groups)
+        try:
+            annotations = service['metadata']['annotations']
+            sg_id = annotations[constants.K8S_ANNOTATION_SECGROUP]
+        except KeyError:
+            return sg_id_list
 
-        annotations = service['metadata']['annotations']
         os_net = clients.get_network_client()
-        sg = os_net.find_security_group(
-            annotations[constants.K8S_ANNOTATION_SECGROUP])
-
-        sg_id_list = []
+        sg = os_net.find_security_group(sg_id)
         if sg:
-            sg_id_list.append(sg.id)
-        LOG.debug("AnnotationServiceSecurityGroupsDriver: sg: %s",
-                  sg)
+            sg_id_list = [sg.id]
+        LOG.debug("AnnotationServiceSecurityGroupsDriver: sg_id_list: %s",
+                  sg_id_list)
         return sg_id_list
