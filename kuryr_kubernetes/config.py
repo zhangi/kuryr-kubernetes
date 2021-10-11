@@ -242,12 +242,6 @@ neutron_defaults = [
                        "them when Kubernetes cluster Kuryr was serving is no "
                        "longer needed."),
                 default=[]),
-    cfg.StrOpt('pod_net_cidr',
-               help=_("CIDR of pod net")),
-    cfg.StrOpt('svc_net_cidr',
-               help=_("CIDR of svc net")),
-    cfg.StrOpt('pod_security_group_name',
-               help=_("Security group name of pod")),
     cfg.BoolOpt('use_kolla_ovs_vsctl',
                 help=_('Use ovs-vsctl in kolla docker'),
                 default=False),
