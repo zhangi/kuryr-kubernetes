@@ -33,7 +33,7 @@ class AnnotationPodSecurityGroupsDriver(base.PodSecurityGroupsDriver):
         annotations = pod['metadata']['annotations']
         os_net = clients.get_network_client()
         sg = os_net.find_security_group(
-            id=annotations[constants.K8S_ANNOTATION_SECGROUP])
+            annotations[constants.K8S_ANNOTATION_SECGROUP])
         sg_id_list = []
         if sg:
             sg_id_list.append(sg.id)
@@ -76,7 +76,7 @@ class AnnotationServiceSecurityGroupsDriver(base.ServiceSecurityGroupsDriver):
         annotations = service['metadata']['annotations']
         os_net = clients.get_network_client()
         sg = os_net.find_security_group(
-            id=annotations[constants.K8S_ANNOTATION_SECGROUP])
+            annotations[constants.K8S_ANNOTATION_SECGROUP])
 
         sg_id_list = []
         if sg:
