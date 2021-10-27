@@ -65,6 +65,8 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
             LOG.exception("Failed to set service finalizer: %s", ex)
             raise
 
+        self._provision_x_service(service)
+
         if loadbalancer_crd is None:
             try:
                 # Bump all the NPs in the namespace to force SG rules
@@ -80,6 +82,92 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         elif self._has_lbaas_spec_changes(service, loadbalancer_crd):
             self._update_crd_spec(loadbalancer_crd, service)
 
+    def _provision_x_service(self, service):
+        x_service = self._build_x_service(service)
+        if not x_service:
+            return
+
+        k8s = clients.get_kubernetes_client()
+        try:
+            k8s.add_finalizer(service, k_const.SERVICE_X_FINALIZER)
+        except k_exc.K8sClientException as ex:
+            LOG.exception("Failed to set x service finalizer: %s", ex)
+            raise
+
+        try:
+            k8s.get(utils.get_res_link(x_service))
+        except k_exc.K8sResourceNotFound:
+            LOG.debug('Service %s not found.', x_service['metadata']['name'])
+            return self._create_x_service(x_service)
+        except k_exc.K8sClientException:
+            LOG.exception('Error retrieving ervice %s/%s.',
+                          x_service['metadata']['namespace'],
+                          x_service['metadata']['name'])
+            raise
+        try:
+            k8s.patch('spec', utils.get_res_link(
+                x_service), x_service['spec'])
+        except k_exc.K8sResourceNotFound:
+            LOG.debug('Service %s not found', x_service['metadata']['name'])
+        except k_exc.K8sConflict:
+            raise k_exc.ResourceNotReady(x_service)
+        except k_exc.K8sClientException:
+            LOG.exception('Error updating service %s',
+                          x_service)
+
+    def _build_x_service(self, service):
+        annotations = service['metadata'].get('annotations', {})
+        svc_name = service['metadata']['name']
+        x_svc_name = annotations.get(k_const.K8S_ANNOTATION_X_SVC_NAME)
+        x_svc_ip = annotations.get(k_const.K8S_ANNOTATION_X_SVC_IP)
+        x_subnet_id = annotations.get(k_const.K8S_ANNOTATION_X_SUBNET)
+        if not x_svc_name:
+            return
+        if not x_svc_ip:
+            return
+        if not x_subnet_id:
+            return
+        ports = []
+        for port in service['spec']['ports']:
+            ports.append({
+                'targetPort': int(port['targetPort']),
+                'port': port['port'],
+                'protocol': port['protocol'],
+            })
+
+        return {
+            'apiVersion': 'v1',
+            'kind': 'Service',
+            'metadata': {
+                'namespace': service['metadata']['namespace'],
+                'name': x_svc_name,
+                'annotations': {
+                    k_const.K8S_ANNOTATION_SVC_IP: x_svc_ip,
+                    k_const.K8S_ANNOTATION_SUBNET: x_subnet_id,
+                    k_const.K8S_ANNOTATION_SVC_NAME: svc_name,
+                },
+            },
+            'spec': {
+                'ports': ports,
+            },
+        }
+
+    def _create_x_service(self, service):
+        k8s = clients.get_kubernetes_client()
+        try:
+            k8s.post('{}/{}/services'.format(
+                k_const.K8S_API_NAMESPACES,
+                service['metadata']['namespace']),
+                service)
+        except k_exc.K8sConflict:
+            raise k_exc.ResourceNotReady(service['metadata']['name'])
+        except k_exc.K8sNamespaceTerminating:
+            raise
+        except k_exc.K8sClientException:
+            LOG.exception("Exception when creating service %s.",
+                          service['metadata']['name'])
+            raise
+
     def _is_supported_type(self, service):
         spec = service['spec']
         return spec.get('type') in SUPPORTED_SERVICE_TYPES
@@ -89,6 +177,10 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
                 service['metadata'].get('annotations', {}))
 
     def _get_service_ip(self, service):
+        annotations = service['metadata'].get('annotations', {})
+        svc_ip = annotations.get(k_const.K8S_ANNOTATION_SVC_IP)
+        if svc_ip:
+            return svc_ip
         if self._is_supported_type(service):
             return service['spec'].get('clusterIP')
         return None
@@ -123,6 +215,21 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         except k_exc.K8sResourceNotFound:
             k8s.remove_finalizer(service, k_const.SERVICE_FINALIZER)
 
+        annotations = service['metadata'].get('annotations', {})
+        x_svc_name = annotations.get(k_const.K8S_ANNOTATION_X_SVC_NAME)
+        svc_name = annotations.get(k_const.K8S_ANNOTATION_SVC_NAME)
+        namespace = service['metadata']['namespace']
+        if x_svc_name:
+            try:
+                k8s.delete(f"{k_const.K8S_API_NAMESPACES}"
+                           f"/{namespace}/services/{x_svc_name}")
+            except k_exc.K8sResourceNotFound:
+                k8s.remove_finalizer(
+                    service, k_const.SERVICE_X_FINALIZER)
+        elif svc_name:
+            k8s.remove_finalizer(
+                service, k_const.SERVICE_X_FINALIZER)
+
     def _has_clusterip(self, service):
         # ignore headless service, clusterIP is None
         return service['spec'].get('clusterIP') != 'None'
@@ -155,11 +262,10 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
             'metadata': {
                 'name': svc_name,
                 'finalizers': [k_const.KURYRLB_FINALIZER],
-                },
+            },
             'spec': spec,
-            'status': {
-                }
-            }
+            'status': {},
+        }
 
         try:
             kubernetes.post('{}/{}/kuryrloadbalancers'.format(
@@ -220,13 +326,13 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         subnet_id = self._get_subnet_id(service, project_id, svc_ip)
         spec_type = service['spec'].get('type')
         spec = {
-                'ip': svc_ip,
-                'ports': ports,
-                'project_id': project_id,
-                'security_groups_ids': sg_ids,
-                'subnet_id': subnet_id,
-                'type': spec_type
-            }
+            'ip': svc_ip,
+            'ports': ports,
+            'project_id': project_id,
+            'security_groups_ids': sg_ids,
+            'subnet_id': subnet_id,
+            'type': spec_type
+        }
 
         if spec_lb_ip is not None:
             spec['lb_ip'] = spec_lb_ip
@@ -317,6 +423,8 @@ class EndpointsHandler(k8s_base.ResourceEventHandler):
                       endpoints['metadata']['name'])
             return
 
+        self._ensure_x_endpoints_present(endpoints)
+
         if loadbalancer_crd is None:
             try:
                 self._create_crd_spec(endpoints)
@@ -327,6 +435,86 @@ class EndpointsHandler(k8s_base.ResourceEventHandler):
                 return
         else:
             self._update_crd_spec(loadbalancer_crd, endpoints)
+
+    def _ensure_x_endpoints_present(self, endpoints):
+        k8s = clients.get_kubernetes_client()
+
+        ep_name = endpoints['metadata']['name']
+        ep_namespace = endpoints['metadata']['namespace']
+        try:
+            service = k8s.get(utils.get_service_link(endpoints))
+        except k_exc.K8sResourceNotFound:
+            LOG.debug('Service %s not found.', ep_name)
+            return
+        except k_exc.K8sClientException:
+            LOG.exception('Error retrieving service %s/%s.',
+                          ep_namespace, ep_name)
+            raise
+        annotations = service['metadata'].get('annotations', {})
+        x_svc_name = annotations.get(k_const.K8S_ANNOTATION_X_SVC_NAME)
+        if not x_svc_name:
+            return
+        x_endpoints = {
+            'apiVersion': 'v1',
+            'kind': 'Endpoints',
+            'metadata': {
+                'name': x_svc_name,
+                'namespace': ep_namespace,
+            },
+            'subsets': [],
+        }
+        for ss in endpoints['subsets']:
+            addresses = ss['addresses']
+            x_addresses = []
+            for addr in addresses:
+                targetRef = addr.get('targetRef')
+                if not targetRef:
+                    continue
+                if targetRef['kind'] != k_const.K8S_OBJ_POD:
+                    continue
+                pod = self._get_pod(targetRef['namespace'], targetRef['name'])
+                pod_annotations = pod['metadata'].get('annotations', {})
+                x_vif_name = pod_annotations.get(
+                    k_const.K8S_ANNOTATION_X_VIF_NAME)
+                if not x_vif_name:
+                    continue
+
+                vifs = driver_utils.get_vifs(pod)
+                if x_vif_name not in vifs:
+                    continue
+                vif = vifs[x_vif_name]
+                if len(vif.network.subnets.objects) == 0:
+                    continue
+                ips = vif.network.subnets.objects[0].ips.objects
+                if len(ips) == 0:
+                    continue
+                x_addresses.append({
+                    'ip':  str(ips[0].address),
+                })
+            x_endpoints['subsets'].append({
+                'addresses': x_addresses,
+                'ports': ss['ports'],
+            })
+        k8s = clients.get_kubernetes_client()
+        try:
+            k8s.get(f"{k_const.K8S_API_NAMESPACES}"
+                    f"/{ep_namespace}/endpoints/{x_svc_name}")
+        except k_exc.K8sResourceNotFound:
+            k8s.post(f"{k_const.K8S_API_NAMESPACES}"
+                     f"/{ep_namespace}/endpoints", x_endpoints)
+        else:
+            k8s.patch('subsets', f"{k_const.K8S_API_NAMESPACES}"
+                      f"/{ep_namespace}/endpoints/{x_svc_name}",
+                      x_endpoints['subsets'])
+
+    def _get_pod(self, namespace, name):
+        k8s = clients.get_kubernetes_client()
+        try:
+            return k8s.get(f"{k_const.K8S_API_NAMESPACES}"
+                           f"/{namespace}/pods/{name}")
+        except k_exc.K8sResourceNotFound as ex:
+            LOG.exception("Failed to get pod: %s", ex)
+            raise
 
     def on_deleted(self, endpoints, *args, **kwargs):
         self._remove_endpoints(endpoints)
