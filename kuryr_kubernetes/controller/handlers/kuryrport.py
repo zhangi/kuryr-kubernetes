@@ -235,7 +235,6 @@ class KuryrPortHandler(k8s_base.ResourceEventHandler):
             LOG.warning("Ignoring event due to pod %s not being "
                         "scheduled yet.", pod_name)
             return False
-        LOG.debug("main_vif: %s", main_vif)
         annotations = pod['metadata'].get('annotations', {})
         extra_routes = annotations.get(constants.K8S_ANNOTATION_X_ROUTES)
         if extra_routes:

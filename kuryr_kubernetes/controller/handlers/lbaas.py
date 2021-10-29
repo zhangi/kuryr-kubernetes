@@ -102,16 +102,19 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
             EndpointsHandler().on_present(endpoints)
             self._create_x_service(x_service)
             LOG.debug('Created service: %s', x_service['metadata']['name'])
+            return
         except k_exc.K8sClientException:
             LOG.exception('Error retrieving ervice %s/%s.',
                           x_service['metadata']['namespace'],
                           x_service['metadata']['name'])
             raise
+
         try:
             k8s.patch('spec', utils.get_res_link(
                 x_service), x_service['spec'])
         except k_exc.K8sResourceNotFound:
             LOG.debug('Service %s not found', x_service['metadata']['name'])
+            raise
         except k_exc.K8sConflict:
             raise k_exc.ResourceNotReady(x_service)
         except k_exc.K8sClientException:

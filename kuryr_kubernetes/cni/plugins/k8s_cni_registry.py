@@ -19,7 +19,7 @@ from oslo_concurrency import lockutils
 from oslo_config import cfg
 from oslo_log import log as logging
 
-from kuryr_kubernetes import clients
+from kuryr_kubernetes import clients, constants
 from kuryr_kubernetes.cni.binding import base as b_base
 from kuryr_kubernetes.cni.plugins import base as base_cni
 from kuryr_kubernetes.cni import utils
@@ -176,17 +176,29 @@ class K8sCNIRegistryPlugin(base_cni.CNIPlugin):
                       "registry")
             raise exceptions.ResourceNotReady(kp_name)
 
-        default_ifname = k_const.DEFAULT_IFNAME
+        try:
+            pod = self.k8s.get(f"{k_const.K8S_API_NAMESPACES}"
+                               f"/{params.args.K8S_POD_NAMESPACE}/pods/"
+                               f"{params.args.K8S_POD_NAME}")
+        except exceptions.K8sResourceNotFound as ex:
+            LOG.exception("Failed to get pod: %s", ex)
+            raise
+
+        pod_annotations = pod['metadata'].get('annotations', {})
+        x_vif = pod_annotations.get(constants.K8S_ANNOTATION_X_VIF_NAME)
+
+        ifname_for_default_gw = k_const.DEFAULT_IFNAME
+        if x_vif:
+            for ifname, vif in vifs.items():
+                if ifname == x_vif:
+                    ifname_for_default_gw = x_vif
         for ifname, vif in vifs.items():
-            if ifname == 'eth1':
-                default_ifname = 'eth1'
-        for ifname, vif in vifs.items():
-            is_default_gateway = (ifname == k_const.DEFAULT_IFNAME)
-            if is_default_gateway:
+            is_default_gateway = (ifname_for_default_gw == ifname)
+            if ifname == k_const.DEFAULT_IFNAME:
                 # NOTE(ygupta): if this is the default interface, we should
                 # use the ifname supplied in the CNI ADD request
                 ifname = params.CNI_IFNAME
-            is_default_gateway = default_ifname == ifname
+
             fn(vif, self._get_inst(kp), ifname, params.CNI_NETNS,
                 report_health=self.report_drivers_health,
                 is_default_gateway=is_default_gateway,
