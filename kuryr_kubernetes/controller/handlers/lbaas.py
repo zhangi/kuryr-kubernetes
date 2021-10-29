@@ -98,6 +98,8 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
             k8s.get(utils.get_res_link(x_service))
         except k_exc.K8sResourceNotFound:
             LOG.debug('Service %s not found.', x_service['metadata']['name'])
+            endpoints = k8s.get(utils.get_endpoints_link(service))
+            EndpointsHandler().on_present(endpoints)
             self._create_x_service(x_service)
             LOG.debug('Created service: %s', x_service['metadata']['name'])
         except k_exc.K8sClientException:
@@ -115,9 +117,6 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         except k_exc.K8sClientException:
             LOG.exception('Error updating service %s',
                           x_service)
-
-        endpoints = k8s.get(utils.get_endpoints_link(service))
-        EndpointsHandler().on_present(endpoints)
 
     def _build_x_service(self, service):
         annotations = service['metadata'].get('annotations', {})

@@ -181,12 +181,12 @@ class K8sCNIRegistryPlugin(base_cni.CNIPlugin):
             if ifname == 'eth1':
                 default_ifname = 'eth1'
         for ifname, vif in vifs.items():
-            is_default_gateway = (ifname == default_ifname)
+            is_default_gateway = (ifname == k_const.DEFAULT_IFNAME)
             if is_default_gateway:
                 # NOTE(ygupta): if this is the default interface, we should
                 # use the ifname supplied in the CNI ADD request
                 ifname = params.CNI_IFNAME
-
+            is_default_gateway = default_ifname == ifname
             fn(vif, self._get_inst(kp), ifname, params.CNI_NETNS,
                 report_health=self.report_drivers_health,
                 is_default_gateway=is_default_gateway,

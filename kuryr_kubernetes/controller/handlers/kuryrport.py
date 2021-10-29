@@ -17,6 +17,7 @@ from os_vif import objects
 from oslo_config import cfg as oslo_cfg
 from oslo_log import log as logging
 
+
 from kuryr_kubernetes import clients
 from kuryr_kubernetes import constants
 from kuryr_kubernetes.controller.drivers import base as drivers
@@ -234,7 +235,15 @@ class KuryrPortHandler(k8s_base.ResourceEventHandler):
             LOG.warning("Ignoring event due to pod %s not being "
                         "scheduled yet.", pod_name)
             return False
-
+        LOG.debug("main_vif: %s", main_vif)
+        annotations = pod['metadata'].get('annotations', {})
+        extra_routes = annotations.get(constants.K8S_ANNOTATION_X_ROUTES)
+        if extra_routes:
+            gateway = str(main_vif.network.subnets.objects[0].gateway)
+            for cidr in extra_routes.split(','):
+                route = objects.route.Route(cidr=cidr, gateway=gateway)
+                main_vif.network.subnets.objects[0].routes.objects.append(
+                    route)
         vifs = {constants.DEFAULT_IFNAME: {'default': True, 'vif': main_vif}}
 
         # Request the additional interfaces from multiple drivers
