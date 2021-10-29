@@ -176,8 +176,12 @@ class K8sCNIRegistryPlugin(base_cni.CNIPlugin):
                       "registry")
             raise exceptions.ResourceNotReady(kp_name)
 
+        default_ifname = k_const.DEFAULT_IFNAME
         for ifname, vif in vifs.items():
-            is_default_gateway = (ifname == k_const.DEFAULT_IFNAME)
+            if ifname == 'eth1':
+                default_ifname = 'eth1'
+        for ifname, vif in vifs.items():
+            is_default_gateway = (ifname == default_ifname)
             if is_default_gateway:
                 # NOTE(ygupta): if this is the default interface, we should
                 # use the ifname supplied in the CNI ADD request
