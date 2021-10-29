@@ -98,7 +98,8 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
             k8s.get(utils.get_res_link(x_service))
         except k_exc.K8sResourceNotFound:
             LOG.debug('Service %s not found.', x_service['metadata']['name'])
-            return self._create_x_service(x_service)
+            self._create_x_service(x_service)
+            LOG.debug('Created service: %s', x_service['metadata']['name'])
         except k_exc.K8sClientException:
             LOG.exception('Error retrieving ervice %s/%s.',
                           x_service['metadata']['namespace'],
@@ -114,6 +115,9 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         except k_exc.K8sClientException:
             LOG.exception('Error updating service %s',
                           x_service)
+
+        endpoints = k8s.get(utils.get_endpoints_link(service))
+        EndpointsHandler().on_present(endpoints)
 
     def _build_x_service(self, service):
         annotations = service['metadata'].get('annotations', {})
@@ -463,7 +467,7 @@ class EndpointsHandler(k8s_base.ResourceEventHandler):
             },
             'subsets': [],
         }
-        for ss in endpoints['subsets']:
+        for ss in endpoints.get('subsets', []):
             addresses = ss['addresses']
             x_addresses = []
             for addr in addresses:
@@ -502,6 +506,7 @@ class EndpointsHandler(k8s_base.ResourceEventHandler):
         except k_exc.K8sResourceNotFound:
             k8s.post(f"{k_const.K8S_API_NAMESPACES}"
                      f"/{ep_namespace}/endpoints", x_endpoints)
+            LOG.debug('Created endpoints: %s', x_endpoints['metadata']['name'])
         else:
             k8s.patch('subsets', f"{k_const.K8S_API_NAMESPACES}"
                       f"/{ep_namespace}/endpoints/{x_svc_name}",
