@@ -496,11 +496,13 @@ class EndpointsHandler(k8s_base.ResourceEventHandler):
                     continue
                 x_addresses.append({
                     'ip':  str(ips[0].address),
+                    'targetRef': targetRef,
                 })
-            x_endpoints['subsets'].append({
-                'addresses': x_addresses,
-                'ports': ss['ports'],
-            })
+            if len(x_addresses) > 0:
+                x_endpoints['subsets'].append({
+                    'addresses': x_addresses,
+                    'ports': ss['ports'],
+                })
         k8s = clients.get_kubernetes_client()
         try:
             k8s.get(f"{k_const.K8S_API_NAMESPACES}"
