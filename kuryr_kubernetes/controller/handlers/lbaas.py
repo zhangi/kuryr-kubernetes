@@ -135,11 +135,14 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
             return
         ports = []
         for port in service['spec']['ports']:
-            ports.append({
+            xport = {
                 'targetPort': int(port['targetPort']),
                 'port': port['port'],
                 'protocol': port['protocol'],
-            })
+            }
+            if 'name' in port:
+                xport['name'] = port['name']
+            ports.append(xport)
 
         return {
             'apiVersion': 'v1',
