@@ -135,11 +135,14 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
             return
         ports = []
         for port in service['spec']['ports']:
-            ports.append({
+            xport = {
                 'targetPort': int(port['targetPort']),
                 'port': port['port'],
                 'protocol': port['protocol'],
-            })
+            }
+            if 'name' in port:
+                xport['name'] = port['name']
+            ports.append(xport)
 
         return {
             'apiVersion': 'v1',
@@ -226,6 +229,7 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         svc_name = annotations.get(k_const.K8S_ANNOTATION_SVC_NAME)
         namespace = service['metadata']['namespace']
         if x_svc_name:
+            # service is the 'native' k8s service created by k8s
             try:
                 k8s.delete(f"{k_const.K8S_API_NAMESPACES}"
                            f"/{namespace}/services/{x_svc_name}")
@@ -233,8 +237,20 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
                 k8s.remove_finalizer(
                     service, k_const.SERVICE_X_FINALIZER)
         elif svc_name:
+            # service is the 'shadow' k8s service created by cni
+            # so we need to find the 'native' service and remove
+            # one of its finalizers set by shadow service
+            try:
+                svc = k8s.get(f"{k_const.K8S_API_NAMESPACES}"
+                              f"/{namespace}/services/{svc_name}")
+            except k_exc.K8sResourceNotFound as ex:
+                LOG.warning("Failed to get service: %s", ex)
+                return
+
+            LOG.debug('Removing finalizer from service %s',
+                      svc["metadata"]["name"])
             k8s.remove_finalizer(
-                service, k_const.SERVICE_X_FINALIZER)
+                svc, k_const.SERVICE_X_FINALIZER)
 
     def _has_clusterip(self, service):
         # ignore headless service, clusterIP is None
@@ -496,11 +512,13 @@ class EndpointsHandler(k8s_base.ResourceEventHandler):
                     continue
                 x_addresses.append({
                     'ip':  str(ips[0].address),
+                    'targetRef': targetRef,
                 })
-            x_endpoints['subsets'].append({
-                'addresses': x_addresses,
-                'ports': ss['ports'],
-            })
+            if len(x_addresses) > 0:
+                x_endpoints['subsets'].append({
+                    'addresses': x_addresses,
+                    'ports': ss['ports'],
+                })
         k8s = clients.get_kubernetes_client()
         try:
             k8s.get(f"{k_const.K8S_API_NAMESPACES}"
