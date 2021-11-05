@@ -229,6 +229,7 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         svc_name = annotations.get(k_const.K8S_ANNOTATION_SVC_NAME)
         namespace = service['metadata']['namespace']
         if x_svc_name:
+            # service is the 'native' k8s service created by k8s
             try:
                 k8s.delete(f"{k_const.K8S_API_NAMESPACES}"
                            f"/{namespace}/services/{x_svc_name}")
@@ -236,8 +237,20 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
                 k8s.remove_finalizer(
                     service, k_const.SERVICE_X_FINALIZER)
         elif svc_name:
+            # service is the 'shadow' k8s service created by cni
+            # so we need to find the 'native' service and remove
+            # one of its finalizers set by shadow service
+            try:
+                svc = k8s.get(f"{k_const.K8S_API_NAMESPACES}"
+                              f"/{namespace}/services/{svc_name}")
+            except k_exc.K8sResourceNotFound as ex:
+                LOG.warning("Failed to get service: %s", ex)
+                return
+
+            LOG.debug('Removing finalizer from service %s',
+                      svc["metadata"]["name"])
             k8s.remove_finalizer(
-                service, k_const.SERVICE_X_FINALIZER)
+                svc, k_const.SERVICE_X_FINALIZER)
 
     def _has_clusterip(self, service):
         # ignore headless service, clusterIP is None

@@ -19,7 +19,7 @@ from oslo_concurrency import lockutils
 from oslo_config import cfg
 from oslo_log import log as logging
 
-from kuryr_kubernetes import clients, constants
+from kuryr_kubernetes import clients
 from kuryr_kubernetes.cni.binding import base as b_base
 from kuryr_kubernetes.cni.plugins import base as base_cni
 from kuryr_kubernetes.cni import utils
@@ -185,7 +185,7 @@ class K8sCNIRegistryPlugin(base_cni.CNIPlugin):
             raise
 
         pod_annotations = pod['metadata'].get('annotations', {})
-        x_vif = pod_annotations.get(constants.K8S_ANNOTATION_X_VIF_NAME)
+        x_vif = pod_annotations.get(k_const.K8S_ANNOTATION_X_VIF_NAME)
 
         ifname_for_default_gw = k_const.DEFAULT_IFNAME
         if x_vif:
