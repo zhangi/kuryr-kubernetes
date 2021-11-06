@@ -486,7 +486,7 @@ class EndpointsHandler(k8s_base.ResourceEventHandler):
             'subsets': [],
         }
         for ss in endpoints.get('subsets', []):
-            addresses = ss['addresses']
+            addresses = ss.get('addresses', [])
             x_addresses = []
             for addr in addresses:
                 targetRef = addr.get('targetRef')
@@ -519,6 +519,9 @@ class EndpointsHandler(k8s_base.ResourceEventHandler):
                     'addresses': x_addresses,
                     'ports': ss['ports'],
                 })
+        if len(x_endpoints['subsets']) == 0:
+            return
+        
         k8s = clients.get_kubernetes_client()
         try:
             k8s.get(f"{k_const.K8S_API_NAMESPACES}"
