@@ -242,6 +242,9 @@ neutron_defaults = [
                        "them when Kubernetes cluster Kuryr was serving is no "
                        "longer needed."),
                 default=[]),
+    cfg.BoolOpt('use_kolla_ovs_vsctl',
+                help=_('Use ovs-vsctl in kolla docker'),
+                default=False),
 ]
 
 octavia_defaults = [
