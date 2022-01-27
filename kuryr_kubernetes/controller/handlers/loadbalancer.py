@@ -20,11 +20,11 @@ from oslo_log import log as logging
 from kuryr_kubernetes import clients
 from kuryr_kubernetes import config
 from kuryr_kubernetes import constants as k_const
+from kuryr_kubernetes import exceptions as k_exc
+from kuryr_kubernetes import utils
 from kuryr_kubernetes.controller.drivers import base as drv_base
 from kuryr_kubernetes.controller.drivers import utils as driver_utils
-from kuryr_kubernetes import exceptions as k_exc
 from kuryr_kubernetes.handlers import k8s_base
-from kuryr_kubernetes import utils
 
 LOG = logging.getLogger(__name__)
 CONF = config.CONF
@@ -76,6 +76,7 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
             return
 
         crd_lb = loadbalancer_crd['status'].get('loadbalancer')
+        LOG.info("KuryrLoadBalancerHandler on_present, crd_lb: %s",crd_lb)
         if crd_lb:
             lb_provider = crd_lb.get('provider')
             spec_lb_provider = loadbalancer_crd['spec'].get('provider')
@@ -166,8 +167,8 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
 
     def _should_ignore(self, loadbalancer_crd):
         return (not(self._has_endpoints(loadbalancer_crd) or
-                    loadbalancer_crd.get('status')) or not
-                loadbalancer_crd['spec'].get('ip'))
+                    loadbalancer_crd.get('status')) or
+                not loadbalancer_crd['spec'].get('subnet_id'))
 
     def _has_endpoints(self, loadbalancer_crd):
         ep_slices = loadbalancer_crd['spec'].get('endpointSlices', [])
@@ -730,20 +731,26 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
             loadbalancer_crd['status'] = {}
 
         if not lb:
-            if loadbalancer_crd['spec'].get('ip'):
-                lb_name = self._drv_lbaas.get_service_loadbalancer_name(
-                    loadbalancer_crd['metadata']['namespace'],
-                    loadbalancer_crd['metadata']['name'])
-                lb = self._drv_lbaas.ensure_loadbalancer(
-                    name=lb_name,
-                    project_id=loadbalancer_crd['spec'].get('project_id'),
-                    subnet_id=loadbalancer_crd['spec'].get('subnet_id'),
-                    ip=loadbalancer_crd['spec'].get('ip'),
-                    security_groups_ids=loadbalancer_crd['spec'].get(
-                        'security_groups_ids'),
-                    service_type=loadbalancer_crd['spec'].get('type'),
-                    provider=loadbalancer_crd['spec'].get('provider'))
-                loadbalancer_crd['status']['loadbalancer'] = lb
+            lb_name = self._drv_lbaas.get_service_loadbalancer_name(
+                loadbalancer_crd['metadata']['namespace'],
+                loadbalancer_crd['metadata']['name'])
+            lb = self._drv_lbaas.ensure_loadbalancer(
+                name=lb_name,
+                project_id=loadbalancer_crd['spec'].get('project_id'),
+                subnet_id=loadbalancer_crd['spec'].get('subnet_id'),
+                ip=loadbalancer_crd['spec'].get('ip'),
+                security_groups_ids=loadbalancer_crd['spec'].get(
+                    'security_groups_ids'),
+                service_type=loadbalancer_crd['spec'].get('type'),
+                provider=loadbalancer_crd['spec'].get('provider'))
+            loadbalancer_crd['status']['loadbalancer'] = lb
+            if loadbalancer_crd['spec'].get('ip') is None:
+                kubernetes = clients.get_kubernetes_client()
+
+                kubernetes.patch("spec",
+                                 f"{k_const.K8S_API_NAMESPACES}/{loadbalancer_crd['metadata']['namespace']}"
+                                 f"/services/{loadbalancer_crd['metadata']['name']}",
+                                 {"externalIPs": [lb['ip']]})
 
             return self._patch_status(loadbalancer_crd)
         return False

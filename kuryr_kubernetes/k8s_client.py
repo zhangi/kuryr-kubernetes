@@ -167,6 +167,7 @@ class K8sClient(object):
         LOG.debug("Patch %(path)s: %(data)s", {'path': path, 'data': data})
         content_type = 'application/merge-patch+json'
         url, header = self._get_url_and_header(path, content_type)
+        LOG.info("patch, url: %s, data: %s", url, data)
         response = self.session.patch(url, json={field: data}, headers=header)
         self._raise_from_response(response)
         return response.json().get('status')

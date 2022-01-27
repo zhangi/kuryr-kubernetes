@@ -25,10 +25,9 @@ from oslo_utils import versionutils
 from kuryr_kubernetes import clients
 from kuryr_kubernetes import config
 from kuryr_kubernetes import constants as k_const
-from kuryr_kubernetes.controller.drivers import base
 from kuryr_kubernetes import exceptions as k_exc
 from kuryr_kubernetes import utils
-
+from kuryr_kubernetes.controller.drivers import base
 
 CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
@@ -509,9 +508,12 @@ class LBaaSv2Driver(base.LBaaSDriver):
         request = {
             'name': loadbalancer['name'],
             'project_id': loadbalancer['project_id'],
-            'vip_address': str(loadbalancer['ip']),
+
             'vip_subnet_id': loadbalancer['subnet_id'],
         }
+
+        if loadbalancer['ip'] is not None:
+            request['vip_address'] = str(loadbalancer['ip'])
 
         if loadbalancer['provider'] is not None:
             request['provider'] = loadbalancer['provider']
@@ -521,6 +523,8 @@ class LBaaSv2Driver(base.LBaaSDriver):
         lbaas = clients.get_loadbalancer_client()
         response = lbaas.create_load_balancer(**request)
         loadbalancer['id'] = response.id
+        if loadbalancer['ip'] is None:
+            loadbalancer['ip'] = response.vip_address
         loadbalancer['port_id'] = self._get_vip_port(loadbalancer).id
         if (loadbalancer['provider'] is not None and
                 loadbalancer['provider'] != response.provider):
