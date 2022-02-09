@@ -76,7 +76,7 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
             return
 
         crd_lb = loadbalancer_crd['status'].get('loadbalancer')
-        LOG.info("KuryrLoadBalancerHandler on_present, crd_lb: %s",crd_lb)
+        LOG.debug("KuryrLoadBalancerHandler on_present, crd_lb: %s",crd_lb)
         if crd_lb:
             lb_provider = crd_lb.get('provider')
             spec_lb_provider = loadbalancer_crd['spec'].get('provider')
