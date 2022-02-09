@@ -19,11 +19,11 @@ from oslo_log import log as logging
 from kuryr_kubernetes import clients
 from kuryr_kubernetes import config
 from kuryr_kubernetes import constants as k_const
+from kuryr_kubernetes import exceptions as k_exc
+from kuryr_kubernetes import utils
 from kuryr_kubernetes.controller.drivers import base as drv_base
 from kuryr_kubernetes.controller.drivers import utils as driver_utils
-from kuryr_kubernetes import exceptions as k_exc
 from kuryr_kubernetes.handlers import k8s_base
-from kuryr_kubernetes import utils
 
 LOG = logging.getLogger(__name__)
 
@@ -190,6 +190,9 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         svc_ip = annotations.get(k_const.K8S_ANNOTATION_SVC_IP)
         if svc_ip:
             return svc_ip
+        sub_net_id = annotations.get(k_const.K8S_ANNOTATION_SUBNET)
+        if sub_net_id:
+            return None
         if self._is_supported_type(service):
             return service['spec'].get('clusterIP')
         return None
@@ -258,6 +261,8 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
 
     def _get_subnet_id(self, service, project_id, ip):
         subnets_mapping = self._drv_subnets.get_subnets(service, project_id)
+        if not ip and len(subnets_mapping) == 1:
+            return list(subnets_mapping.keys())[0]
         subnet_ids = {
             subnet_id
             for subnet_id, network in subnets_mapping.items()
@@ -267,9 +272,9 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         if len(subnet_ids) != 1:
             raise k_exc.IntegrityError(_(
                 "Found %(num)s subnets for service %(link)s IP %(ip)s") % {
-                    'link': utils.get_res_link(service),
-                    'ip': ip,
-                    'num': len(subnet_ids)})
+                                           'link': utils.get_res_link(service),
+                                           'ip': ip,
+                                           'num': len(subnet_ids)})
 
         return subnet_ids.pop()
 
@@ -306,6 +311,7 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         kubernetes = clients.get_kubernetes_client()
         spec = self._build_kuryrloadbalancer_spec(service)
         LOG.debug('Patching KuryrLoadBalancer CRD %s', loadbalancer_crd)
+
         try:
             kubernetes.patch_crd('spec', utils.get_res_link(loadbalancer_crd),
                                  spec)
@@ -348,13 +354,14 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         subnet_id = self._get_subnet_id(service, project_id, svc_ip)
         spec_type = service['spec'].get('type')
         spec = {
-            'ip': svc_ip,
             'ports': ports,
             'project_id': project_id,
             'security_groups_ids': sg_ids,
             'subnet_id': subnet_id,
             'type': spec_type
         }
+        if svc_ip is not None:
+            spec['ip'] = svc_ip
 
         if spec_lb_ip is not None:
             spec['lb_ip'] = spec_lb_ip
@@ -373,6 +380,11 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         svc_ip = self._get_service_ip(service)
 
         if loadbalancer_crd['spec'].get('ip') is None:
+            annotations = service['metadata'].get('annotations', {})
+            sub_net_id = annotations.get(k_const.K8S_ANNOTATION_SUBNET)
+            if sub_net_id is not None and loadbalancer_crd['spec'].get('subnet_id') is None:
+                return True
+
             if svc_ip is None:
                 return False
             return True
@@ -391,8 +403,8 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         cli_timeout, mem_timeout = self._get_data_timeout_annotation(service)
 
         for spec_value, current_value in [(loadbalancer_crd['spec'].get(
-            'timeout_client_data'), cli_timeout), (loadbalancer_crd[
-                'spec'].get('timeout_member_data'), mem_timeout)]:
+                'timeout_client_data'), cli_timeout), (loadbalancer_crd[
+                                                           'spec'].get('timeout_member_data'), mem_timeout)]:
             if not spec_value and not current_value:
                 continue
             elif spec_value != current_value:
@@ -511,7 +523,7 @@ class EndpointsHandler(k8s_base.ResourceEventHandler):
                 if len(ips) == 0:
                     continue
                 x_addresses.append({
-                    'ip':  str(ips[0].address),
+                    'ip': str(ips[0].address),
                     'targetRef': targetRef,
                 })
             if len(x_addresses) > 0:
@@ -521,7 +533,7 @@ class EndpointsHandler(k8s_base.ResourceEventHandler):
                 })
         if len(x_endpoints['subsets']) == 0:
             return
-        
+
         k8s = clients.get_kubernetes_client()
         try:
             k8s.get(f"{k_const.K8S_API_NAMESPACES}"
@@ -532,7 +544,7 @@ class EndpointsHandler(k8s_base.ResourceEventHandler):
             LOG.debug('Created endpoints: %s', x_endpoints['metadata']['name'])
         else:
             k8s.patch('subsets', f"{k_const.K8S_API_NAMESPACES}"
-                      f"/{ep_namespace}/endpoints/{x_svc_name}",
+                                 f"/{ep_namespace}/endpoints/{x_svc_name}",
                       x_endpoints['subsets'])
 
     def _get_pod(self, namespace, name):
