@@ -185,6 +185,10 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         return (k_const.K8S_ANNOTATION_LBAAS_SPEC in
                 service['metadata'].get('annotations', {}))
 
+    def _has_skip_annotation(self, service):
+        return (k_const.K8S_ANNOTATION_SKIP_LBAAS in
+                service['metadata'].get('annotations', {}))
+
     def _get_service_ip(self, service):
         annotations = service['metadata'].get('annotations', {})
         svc_ip = annotations.get(k_const.K8S_ANNOTATION_SVC_IP)
@@ -198,6 +202,8 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         return None
 
     def _should_ignore(self, service):
+        if self._has_skip_annotation(service):
+            return 'Skipping service with skip annotation'
         if not self._has_clusterip(service):
             return 'Skipping headless Service %s.'
         if not self._is_supported_type(service):
@@ -272,9 +278,9 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         if len(subnet_ids) != 1:
             raise k_exc.IntegrityError(_(
                 "Found %(num)s subnets for service %(link)s IP %(ip)s") % {
-                                           'link': utils.get_res_link(service),
-                                           'ip': ip,
-                                           'num': len(subnet_ids)})
+                'link': utils.get_res_link(service),
+                'ip': ip,
+                'num': len(subnet_ids)})
 
         return subnet_ids.pop()
 
@@ -404,7 +410,7 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
 
         for spec_value, current_value in [(loadbalancer_crd['spec'].get(
                 'timeout_client_data'), cli_timeout), (loadbalancer_crd[
-                                                           'spec'].get('timeout_member_data'), mem_timeout)]:
+                    'spec'].get('timeout_member_data'), mem_timeout)]:
             if not spec_value and not current_value:
                 continue
             elif spec_value != current_value:
