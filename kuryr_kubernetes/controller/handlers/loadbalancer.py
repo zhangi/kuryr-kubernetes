@@ -710,7 +710,7 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
     def _sync_lbaas_loadbalancer(self, loadbalancer_crd):
         lb = loadbalancer_crd['status'].get('loadbalancer')
 
-        if lb and lb['ip'] != loadbalancer_crd['spec'].get('ip'):
+        if lb and loadbalancer_crd['spec'].get('ip') and lb['ip'] != loadbalancer_crd['spec'].get('ip'):
             # if loadbalancerIP was associated to lbaas VIP, disassociate it.
 
             try:
