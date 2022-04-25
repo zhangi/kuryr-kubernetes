@@ -85,11 +85,6 @@ class NPWGMultiVIFDriver(base.MultiVIFDriver):
                                   "doesn't contain any subnet for %s driver "
                                   "alias. Default pod_subnet was used.", alias)
             subnet = {subnet_id: utils.get_subnet(subnet_id)}
-            pod_annotations = pod['metadata'].get('annotations', {})
-            annotated_project_id = pod_annotations.get(
-                constants.K8S_ANNOTATION_X_PROJECT)
-            if annotated_project_id:
-                project_id = annotated_project_id
             vif = vif_drv.request_vif(pod, project_id, subnet, security_groups)
             if vif:
                 vifs.append(vif)

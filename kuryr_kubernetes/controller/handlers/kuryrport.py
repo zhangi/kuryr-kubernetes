@@ -247,9 +247,13 @@ class KuryrPortHandler(k8s_base.ResourceEventHandler):
 
         # Request the additional interfaces from multiple drivers
         index = 0
+        x_project_id = annotations.get(constants.K8S_ANNOTATION_X_PROJECT)
+        if not x_project_id:
+            x_project_id = project_id
+        x_security_groups = self._drv_sg.get_security_groups(pod, x_project_id)
         for driver in self._drv_multi_vif:
-            additional_vifs = driver.request_additional_vifs(pod, project_id,
-                                                             security_groups)
+            additional_vifs = driver.request_additional_vifs(pod, x_project_id,
+                                                             x_security_groups)
             for index, vif in enumerate(additional_vifs, start=index+1):
                 ifname = (oslo_cfg.CONF.kubernetes.additional_ifname_prefix +
                           str(index))

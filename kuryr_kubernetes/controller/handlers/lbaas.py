@@ -203,7 +203,7 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
 
     def _should_ignore(self, service):
         if self._has_skip_annotation(service):
-            return 'Skipping service with skip annotation'
+            return 'Skipping service %s due to skip annotation.'
         if not self._has_clusterip(service):
             return 'Skipping headless Service %s.'
         if not self._is_supported_type(service):

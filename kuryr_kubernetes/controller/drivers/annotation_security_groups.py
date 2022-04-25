@@ -41,7 +41,7 @@ class AnnotationPodSecurityGroupsDriver(base.PodSecurityGroupsDriver):
         sg_id_list = []
         for group in groups.split(','):
             sg = os_net.find_security_group(group)
-            if sg:
+            if sg and sg.project_id == project_id:
                 sg_id_list.append(sg.id)
         LOG.debug("AnnotationPodSecurityGroupsDriver: sg_id_list: %s",
                   sg_id_list)
