@@ -12,9 +12,10 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-
+import time
 from kuryr.lib import constants as kl_const
 from openstack import exceptions as os_exc
+from oslo_concurrency import lockutils
 from oslo_config import cfg
 from oslo_log import log as logging
 
@@ -50,7 +51,11 @@ class NeutronPodVIFDriver(base.PodVIFDriver):
         os_net = clients.get_network_client()
 
         rq = self._get_port_request(pod, project_id, subnets, security_groups)
-        port = os_net.create_port(**rq)
+        group = "kuryr-request-vif-lock-%s" % (rq['network_id'],)
+        with lockutils.lock(group):
+            t_beg = time.time()
+            port = os_net.create_port(**rq)
+            LOG.info("create port: %.2fs, %s", time.time()-t_beg, port.id)
 
         self._check_port_binding([port])
         if not self._tag_on_creation:
@@ -91,7 +96,11 @@ class NeutronPodVIFDriver(base.PodVIFDriver):
         return vifs
 
     def release_vif(self, pod, vif, project_id=None, security_groups=None):
-        clients.get_network_client().delete_port(vif.id)
+        group = "kuryr-request-vif-lock-%s" % (vif.network.id,)
+        with lockutils.lock(group):
+            t_beg = time.time()
+            clients.get_network_client().delete_port(vif.id)
+            LOG.info("delete port: %.2fs, %s", time.time()-t_beg, vif.id)
 
     def activate_vif(self, vif, **kwargs):
         if vif.active:
