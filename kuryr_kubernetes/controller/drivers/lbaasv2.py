@@ -145,7 +145,7 @@ class LBaaSv2Driver(base.LBaaSDriver):
 
     def ensure_loadbalancer(self, name, project_id, subnet_id, ip,
                             security_groups_ids=None, service_type=None,
-                            provider=None):
+                            provider=None, tags=None, qos_policy_id=None):
         request = {
             'name': name,
             'project_id': project_id,
@@ -154,6 +154,10 @@ class LBaaSv2Driver(base.LBaaSDriver):
             'security_groups': security_groups_ids,
             'provider': provider
         }
+        if tags:
+            request['tags'] = tags
+        if qos_policy_id:
+            request['qos_policy_id'] = qos_policy_id
 
         response = self._ensure_loadbalancer(request)
 
@@ -166,14 +170,15 @@ class LBaaSv2Driver(base.LBaaSDriver):
 
         return response
 
-    def release_loadbalancer(self, loadbalancer):
+    def release_loadbalancer(self, loadbalancer, keep_vip_port=False):
         lbaas = clients.get_loadbalancer_client()
         self._release(
             loadbalancer,
             loadbalancer,
             lbaas.delete_load_balancer,
             loadbalancer['id'],
-            cascade=True)
+            cascade=True,
+            keep_vip_port=keep_vip_port)
         self._wait_for_deletion(loadbalancer, _ACTIVATION_TIMEOUT)
 
     def _create_listeners_acls(self, loadbalancer, port, target_port,
@@ -511,9 +516,20 @@ class LBaaSv2Driver(base.LBaaSDriver):
 
             'vip_subnet_id': loadbalancer['subnet_id'],
         }
+        if loadbalancer.get('tags'):
+            request['tags'] = loadbalancer['tags']
+        qos_policy = loadbalancer.get('qos_policy_id')
+        if qos_policy:
+            request['vip_qos_policy_id'] = qos_policy
 
         if loadbalancer['ip'] is not None:
-            request['vip_address'] = str(loadbalancer['ip'])
+            vip_port = self._get_vip_port(loadbalancer)
+            if vip_port:
+                # reuse vip port if any
+                request['vip_port_id'] = vip_port.id
+                del request['vip_subnet_id']
+            else:
+                request['vip_address'] = str(loadbalancer['ip'])
 
         if loadbalancer['provider'] is not None:
             request['provider'] = loadbalancer['provider']
@@ -548,8 +564,10 @@ class LBaaSv2Driver(base.LBaaSDriver):
             loadbalancer['id'] = os_lb.id
             loadbalancer['port_id'] = self._get_vip_port(loadbalancer).id
             loadbalancer['provider'] = os_lb.provider
+            if os_lb.vip_qos_policy_id:
+                loadbalancer['qos_policy_id'] = os_lb.vip_qos_policy_id
             if os_lb.provisioning_status == 'ERROR':
-                self.release_loadbalancer(loadbalancer)
+                self.release_loadbalancer(loadbalancer, keep_vip_port=True)
                 utils.clean_lb_crd_status(loadbalancer['name'])
                 return None
         except (KeyError, StopIteration):
@@ -825,7 +843,7 @@ class LBaaSv2Driver(base.LBaaSDriver):
             elif status == 'ERROR':
                 LOG.debug("Releasing loadbalancer %s with error status",
                           loadbalancer['id'])
-                self.release_loadbalancer(loadbalancer)
+                self.release_loadbalancer(loadbalancer, keep_vip_port=True)
                 utils.clean_lb_crd_status(loadbalancer['name'])
                 return None
             elif status == 'DELETED':

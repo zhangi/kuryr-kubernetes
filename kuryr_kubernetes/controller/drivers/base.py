@@ -479,7 +479,8 @@ class LBaaSDriver(DriverBase):
 
     @abc.abstractmethod
     def ensure_loadbalancer(self, name, project_id, subnet_id, ip,
-                            security_groups_ids, service_type, provider):
+                            security_groups_ids, service_type, provider, 
+                            tags, qos_policy_id):
         """Get or create load balancer.
 
         :param name: LoadBlancer name
@@ -490,6 +491,8 @@ class LBaaSDriver(DriverBase):
                                     access to the load balancer
         :param service_type: K8s service type (ClusterIP or LoadBalancer)
         :param provider: load balancer backend service
+        :param tags: OpenStack tags
+        :param qos_policy_id: Openstack QoS policy ID
         """
         raise NotImplementedError()
 

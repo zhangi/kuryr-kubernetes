@@ -16,12 +16,14 @@
 from functools import partial
 import ipaddress
 import os
+import urllib
 
 from keystoneauth1 import session as k_session
 from kuryr.lib import utils
 from openstack import connection
 from openstack import exceptions as os_exc
 from openstack.load_balancer.v2 import listener as os_listener
+from openstack.load_balancer.v2 import load_balancer as os_lb
 from openstack.network.v2 import port as os_port
 from openstack.network.v2 import trunk as os_trunk
 from openstack import resource as os_resource
@@ -137,6 +139,17 @@ def _delete_trunk_subports(self, trunk, subports):
     return trunk
 
 
+def _delete_load_balancer(self, load_balancer, cascade=True,
+                          keep_vip_port=False):
+    params = {
+        'cascade': cascade,
+        'keep_vip_port': keep_vip_port}
+    qs = urllib.parse.urlencode(params)
+    uri = '%s/%s?%s' % (os_lb.LoadBalancer.base_path, load_balancer, qs)
+    response = self.delete(uri)
+    os_exc.raise_from_response(response)
+
+
 def handle_neutron_errors(method, *args, **kwargs):
     """Handle errors on openstacksdk router methods"""
     result = method(*args, **kwargs)
@@ -181,6 +194,8 @@ def setup_openstacksdk():
                                               conn.network)
     conn.network.delete_trunk_subports = partial(_delete_trunk_subports,
                                                  conn.network)
+    conn.load_balancer.delete_load_balancer = partial(_delete_load_balancer,
+                                                      conn.load_balancer)
     _clients[_OPENSTACKSDK] = conn
 
 

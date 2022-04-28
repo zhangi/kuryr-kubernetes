@@ -127,6 +127,8 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         x_svc_name = annotations.get(k_const.K8S_ANNOTATION_X_SVC_NAME)
         x_svc_ip = annotations.get(k_const.K8S_ANNOTATION_X_SVC_IP)
         x_subnet_id = annotations.get(k_const.K8S_ANNOTATION_X_SUBNET)
+        x_tags = annotations.get(k_const.K8S_ANNOTATION_X_TAGS)
+        x_qos = annotations.get(k_const.K8S_ANNOTATION_X_QOS)
         if not x_svc_name:
             return
         if not x_svc_ip:
@@ -144,17 +146,22 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
                 xport['name'] = port['name']
             ports.append(xport)
 
+        annotations = {
+            k_const.K8S_ANNOTATION_SVC_IP: x_svc_ip,
+            k_const.K8S_ANNOTATION_SUBNET: x_subnet_id,
+            k_const.K8S_ANNOTATION_SVC_NAME: svc_name,
+        }
+        if x_tags:
+            annotations[k_const.K8S_ANNOTATION_TAGS] = x_tags
+        if x_qos:
+            annotations[k_const.K8S_ANNOTATION_X_QOS] = x_qos
         return {
             'apiVersion': 'v1',
             'kind': 'Service',
             'metadata': {
                 'namespace': service['metadata']['namespace'],
                 'name': x_svc_name,
-                'annotations': {
-                    k_const.K8S_ANNOTATION_SVC_IP: x_svc_ip,
-                    k_const.K8S_ANNOTATION_SUBNET: x_subnet_id,
-                    k_const.K8S_ANNOTATION_SVC_NAME: svc_name,
-                },
+                'annotations': annotations,
             },
             'spec': {
                 'ports': ports,
@@ -200,6 +207,15 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         if self._is_supported_type(service):
             return service['spec'].get('clusterIP')
         return None
+
+    def _get_tags(self, service):
+        annotations = service['metadata'].get('annotations', {})
+        tags = annotations.get(k_const.K8S_ANNOTATION_TAGS, '')
+        return tags.split(',')
+
+    def _get_qos_policy_id(self, service):
+        annotations = service['metadata'].get('annotations', {})
+        return annotations.get(k_const.K8S_ANNOTATION_QOS)
 
     def _should_ignore(self, service):
         if self._has_skip_annotation(service):
@@ -366,6 +382,13 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
             'subnet_id': subnet_id,
             'type': spec_type
         }
+        tags = self._get_tags(service)
+        if tags:
+            spec['tags'] = tags
+        qos = self._get_qos_policy_id(service)
+        if qos:    
+            spec['qos_policy_id'] = qos
+        
         if svc_ip is not None:
             spec['ip'] = svc_ip
 

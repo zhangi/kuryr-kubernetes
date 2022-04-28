@@ -137,8 +137,8 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
         lbaas_spec = {}
         self._drv_lbaas.add_tags('loadbalancer', lbaas_spec)
         loadbalancers = lbaas.load_balancers(**lbaas_spec)
-        loadbalancers_id = [loadbalancer['id']
-                            for loadbalancer in loadbalancers]
+        loadbalancers_id = set(loadbalancer['id']
+                            for loadbalancer in loadbalancers)
         # for each loadbalancer id in the CRD status, check if exists in
         # OpenStack
         crds_to_reconcile_selflink = [crd_lb['selflink'] for crd_lb in
@@ -742,7 +742,9 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
                 security_groups_ids=loadbalancer_crd['spec'].get(
                     'security_groups_ids'),
                 service_type=loadbalancer_crd['spec'].get('type'),
-                provider=loadbalancer_crd['spec'].get('provider'))
+                provider=loadbalancer_crd['spec'].get('provider'),
+                tags=loadbalancer_crd['spec'].get('tags'),
+                qos_policy_id=loadbalancer_crd['spec'].get('qos_policy_id'))
             loadbalancer_crd['status']['loadbalancer'] = lb
             if loadbalancer_crd['spec'].get('ip') is None:
                 kubernetes = clients.get_kubernetes_client()

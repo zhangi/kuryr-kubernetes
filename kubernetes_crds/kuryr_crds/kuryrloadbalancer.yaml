@@ -114,6 +114,12 @@ spec:
                 type: integer
               timeout_member_data:
                 type: integer
+              tags:
+                type: array
+                items:
+                  type: string
+              qos_policy_id:
+                type: string
           status:
             type: object
             properties:
@@ -173,6 +179,12 @@ spec:
                     type: array
                     items:
                       type: string
+                  tags:
+                    type: array
+                    items:
+                      type: string
+                  qos_policy_id:
+                    type: string
                   subnet_id:
                     type: string
               members:
