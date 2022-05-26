@@ -17,6 +17,7 @@ import random
 import time
 
 from openstack import exceptions as os_exc
+from oslo_concurrency import lockutils
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import timeutils
@@ -537,7 +538,18 @@ class LBaaSv2Driver(base.LBaaSDriver):
         self.add_tags('loadbalancer', request)
 
         lbaas = clients.get_loadbalancer_client()
-        response = lbaas.create_load_balancer(**request)
+        response = None
+        if request.get('vip_port_id'):
+            group = "kuryr-lb-create-lock-%s" % (request['vip_port_id'],)
+            with lockutils.lock(group):
+                lb_id = self._find_loadbalancer_with_port(
+                    request.get('vip_port_id'),
+                    request.get('project_id'))
+                if lb_id:
+                    raise k_exc.IntegrityError()
+                response = lbaas.create_load_balancer(**request)
+        else:
+            response = lbaas.create_load_balancer(**request)
         loadbalancer['id'] = response.id
         if loadbalancer['ip'] is None:
             loadbalancer['ip'] = response.vip_address
@@ -549,6 +561,20 @@ class LBaaSv2Driver(base.LBaaSDriver):
             return None
         loadbalancer['provider'] = response.provider
         return loadbalancer
+
+    def _find_loadbalancer_with_port(self, vip_port_id, project_id):
+        if not vip_port_id:
+            return None
+        lbaas = clients.get_loadbalancer_client()
+        response = lbaas.load_balancers(
+            project_id=project_id,
+            vip_port_id=vip_port_id,
+        )
+        try:
+            os_lb = next(response)  # openstacksdk returns a generator
+        except (KeyError, StopIteration):
+            return None
+        return os_lb
 
     def _find_loadbalancer(self, loadbalancer):
         lbaas = clients.get_loadbalancer_client()
@@ -775,6 +801,8 @@ class LBaaSv2Driver(base.LBaaSDriver):
         except os_exc.HttpException as e:
             if e.status_code not in OKAY_CODES:
                 raise
+        except k_exc.IntegrityError:
+            pass
         result = self._find_loadbalancer(loadbalancer)
         if result:
             LOG.debug("Found %(obj)s", {'obj': result})

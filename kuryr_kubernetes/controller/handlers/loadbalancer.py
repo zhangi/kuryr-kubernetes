@@ -76,7 +76,7 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
             return
 
         crd_lb = loadbalancer_crd['status'].get('loadbalancer')
-        LOG.debug("KuryrLoadBalancerHandler on_present, crd_lb: %s",crd_lb)
+        LOG.debug("KuryrLoadBalancerHandler on_present, crd_lb: %s", crd_lb)
         if crd_lb:
             lb_provider = crd_lb.get('provider')
             spec_lb_provider = loadbalancer_crd['spec'].get('provider')
@@ -97,7 +97,7 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
             # associate it to LB VIP and update K8S service status
             lb_ip = loadbalancer_crd['spec'].get('lb_ip')
             pub_info = loadbalancer_crd['status'].get(
-                    'service_pub_ip_info')
+                'service_pub_ip_info')
             if pub_info is None and loadbalancer_crd['spec'].get('type'):
                 service_pub_ip_info = (
                     self._drv_service_pub_ip.acquire_service_pub_ip_info(
@@ -131,18 +131,18 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
         # get the loadbalancers id in the CRD status
         crd_loadbalancer_ids = [{'id': loadbalancer_crd.get('status', {}).get(
                                 'loadbalancer', {}).get('id', {}), 'selflink':
-                                utils.get_res_link(loadbalancer_crd)} for
-                                loadbalancer_crd in loadbalancer_crds]
+            utils.get_res_link(loadbalancer_crd)} for
+            loadbalancer_crd in loadbalancer_crds]
         lbaas = clients.get_loadbalancer_client()
         lbaas_spec = {}
         self._drv_lbaas.add_tags('loadbalancer', lbaas_spec)
         loadbalancers = lbaas.load_balancers(**lbaas_spec)
         loadbalancers_id = set(loadbalancer['id']
-                            for loadbalancer in loadbalancers)
+                               for loadbalancer in loadbalancers)
         # for each loadbalancer id in the CRD status, check if exists in
         # OpenStack
         crds_to_reconcile_selflink = [crd_lb['selflink'] for crd_lb in
-                                      crd_loadbalancer_ids if
+                                      crd_loadbalancer_ids if crd_lb['id'] and
                                       crd_lb['id'] not in loadbalancers_id]
         if not crds_to_reconcile_selflink:
             LOG.debug("KuryrLoadBalancer CRDs already in sync with OpenStack")
