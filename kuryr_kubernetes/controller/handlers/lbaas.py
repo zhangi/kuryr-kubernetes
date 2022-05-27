@@ -154,7 +154,7 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         if x_tags:
             annotations[k_const.K8S_ANNOTATION_TAGS] = x_tags
         if x_qos:
-            annotations[k_const.K8S_ANNOTATION_X_QOS] = x_qos
+            annotations[k_const.K8S_ANNOTATION_QOS] = x_qos
         return {
             'apiVersion': 'v1',
             'kind': 'Service',
