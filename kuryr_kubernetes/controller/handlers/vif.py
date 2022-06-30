@@ -40,6 +40,15 @@ class VIFHandler(k8s_base.ResourceEventHandler):
     OBJECT_KIND = constants.K8S_OBJ_POD
     OBJECT_WATCH_PATH = "%s/%s" % (constants.K8S_API_BASE, "pods")
 
+    def _check_finalize(self, obj):
+        deletion_timestamp = super()._check_finalize(obj)
+        if not deletion_timestamp:
+            return
+        for status in obj['status']['containerStatuses']:
+            if 'terminated' not in status['state']:
+                return
+        return deletion_timestamp
+
     def on_present(self, pod, *args, **kwargs):
         if (driver_utils.is_host_network(pod) or
                 not self._is_pod_scheduled(pod)):
