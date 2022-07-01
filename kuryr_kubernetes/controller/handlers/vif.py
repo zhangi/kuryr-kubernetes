@@ -13,6 +13,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import contextlib
 from oslo_log import log as logging
 
 from kuryr_kubernetes import clients
@@ -44,9 +45,10 @@ class VIFHandler(k8s_base.ResourceEventHandler):
         deletion_timestamp = super()._check_finalize(obj)
         if not deletion_timestamp:
             return
-        for status in obj['status']['containerStatuses']:
-            if 'terminated' not in status['state']:
-                return
+        with contextlib.suppress(KeyError):
+            for status in obj['status']['containerStatuses']:
+                if 'running' in status['state']:
+                    return
         return deletion_timestamp
 
     def on_present(self, pod, *args, **kwargs):
