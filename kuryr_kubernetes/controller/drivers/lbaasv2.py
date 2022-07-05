@@ -526,7 +526,8 @@ class LBaaSv2Driver(base.LBaaSDriver):
         with lockutils.lock(group):
             watch = utils.PerfWatch()
             response = lbaas.create_load_balancer(**request)
-            LOG.info("create lb: %.2fs %s", watch.elapsed(), request['name'])
+            LOG.info("create lb: %.2fs %s %s", watch.elapsed(),
+                     request['name'], response.id)
         loadbalancer['id'] = response.id
         if loadbalancer['ip'] is None:
             loadbalancer['ip'] = response.vip_address
