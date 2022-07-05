@@ -18,6 +18,7 @@ import time
 
 from openstack import exceptions as os_exc
 from oslo_config import cfg
+from oslo_concurrency import lockutils
 from oslo_log import log as logging
 from oslo_utils import timeutils
 from oslo_utils import versionutils
@@ -521,7 +522,11 @@ class LBaaSv2Driver(base.LBaaSDriver):
         self.add_tags('loadbalancer', request)
 
         lbaas = clients.get_loadbalancer_client()
-        response = lbaas.create_load_balancer(**request)
+        group = "lbaas-project-%s" % (loadbalancer['project_id'],)
+        with lockutils.lock(group):
+            watch = utils.PerfWatch()
+            response = lbaas.create_load_balancer(**request)
+            LOG.info("create lb: %.2fs %s", watch.elapsed(), request['name'])
         loadbalancer['id'] = response.id
         if loadbalancer['ip'] is None:
             loadbalancer['ip'] = response.vip_address
@@ -573,7 +578,12 @@ class LBaaSv2Driver(base.LBaaSDriver):
             request['timeout_member_data'] = timeout_mem
         self.add_tags('listener', request)
         lbaas = clients.get_loadbalancer_client()
-        response = lbaas.create_listener(**request)
+        group = "lbaas-project-%s" % (listener['project_id'],)
+        with lockutils.lock(group):
+            watch = utils.PerfWatch()
+            response = lbaas.create_listener(**request)
+            LOG.info("create listener: %.2fs %s %s",
+                     watch.elapsed(), request['name'], response.id)
         listener['id'] = response.id
         if timeout_cli:
             listener['timeout_client_data'] = response.timeout_client_data
@@ -663,7 +673,12 @@ class LBaaSv2Driver(base.LBaaSDriver):
         }
         self.add_tags('pool', request)
         lbaas = clients.get_loadbalancer_client()
-        response = lbaas.create_pool(**request)
+        group = "lbaas-project-%s" % (pool['project_id'],)
+        with lockutils.lock(group):
+            watch = utils.PerfWatch()
+            response = lbaas.create_pool(**request)
+            LOG.info("create pool: %.2fs %s %s", watch.elapsed(),
+                     request['name'], response.id)
         pool['id'] = response.id
         return pool
 
@@ -703,7 +718,12 @@ class LBaaSv2Driver(base.LBaaSDriver):
         }
         self.add_tags('member', request)
         lbaas = clients.get_loadbalancer_client()
-        response = lbaas.create_member(member['pool_id'], **request)
+        group = "lbaas-project-%s" % (member['project_id'],)
+        with lockutils.lock(group):
+            watch = utils.PerfWatch()
+            response = lbaas.create_member(member['pool_id'], **request)
+            LOG.info("create member: %.2fs %s %s",
+                     watch.elapsed(), request['name'], response.id)
         member['id'] = response.id
         return member
 
@@ -793,8 +813,13 @@ class LBaaSv2Driver(base.LBaaSDriver):
         for remaining in self._provisioning_timer(_ACTIVATION_TIMEOUT):
             try:
                 try:
-                    delete(*args, **kwargs)
-                    return
+                    group = "lbaas-project-%s" % (loadbalancer['project_id'],)
+                    with lockutils.lock(group):
+                        watch = utils.PerfWatch()
+                        delete(*args, **kwargs)
+                        LOG.info("%s %.2fs %s", delete.__name__,
+                                 watch.elapsed(), obj['id'])
+                        return
                 except (os_exc.ConflictException, os_exc.BadRequestException):
                     if not self._wait_for_provisioning(
                             loadbalancer, remaining):

@@ -636,3 +636,9 @@ def get_subnet_by_ip(nodes_subnets, target_ip):
             return nodes_subnet
 
     return None
+
+class PerfWatch(object):
+    def __init__(self):
+        self._since = time.perf_counter()
+    def elapsed(self):
+        return time.perf_counter() - self._since
