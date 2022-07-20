@@ -21,10 +21,6 @@ class EndpointsHandler(k8s_base.ResourceEventHandler):
         self.k8s = clients.get_kubernetes_client()
 
     def on_present(self, endpoints: dict, *_, **__):
-        """
-        https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#endpoints-v1-core
-        """
-        # TODO: retry??? how???
         name = endpoints["metadata"]["name"]
         namespace = endpoints["metadata"]["namespace"]
 
@@ -32,27 +28,23 @@ class EndpointsHandler(k8s_base.ResourceEventHandler):
             ksp = self.k8s.get_crd(
                 "kuryrsecuritygroups", namespace=namespace, name=name
             )
-        except k_exc.K8sResourceNotFound:
-            LOG.info(
-                "[ep on_present] ksg not found for ep: %s/%s", namespace, name
+            self.k8s.patch_crd(
+                "status",
+                utils.get_res_link(ksp),
+                {
+                    "endpointResourceVersoin": endpoints["metadata"][
+                        "resourceVersion"
+                    ]
+                },
             )
-            return
-
-        self.k8s.patch_crd(
-            "status",
-            utils.get_res_link(ksp),
-            {
-                "endpointResourceVersoin": endpoints["metadata"][
-                    "resourceVersion"
-                ]
-            },
-        )
-        LOG.info(
-            "ksg crd updated by ep %s/%s: resourceVersion %s",
-            namespace,
-            name,
-            endpoints["metadata"]["resourceVersion"],
-        )
+            LOG.info(
+                "ksg crd updated by ep %s/%s: resourceVersion %s",
+                namespace,
+                name,
+                endpoints["metadata"]["resourceVersion"],
+            )
+        except k_exc.K8sResourceNotFound:
+            LOG.debug("ksg not found for ep: %s/%s", namespace, name)
 
 
 class SecurityGroupHandler(k8s_base.ResourceEventHandler):
@@ -65,19 +57,19 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
         self.os_net = clients.get_network_client()
 
     def on_present(self, ksg: dict, *_, **__):
-        ep_name = ksg["spec"]["endpointName"]
+        name = ksg["spec"]["endpointName"]
         namespace = ksg["metadata"]["namespace"]
         sg_ids: [str] = ksg["status"]["securityGroupIDs"]
 
         try:
             eps = self.k8s.get_object(
-                "endpoints", namespace=namespace, name=ep_name
+                "endpoints", namespace=namespace, name=name
             )
         except k_exc.K8sResourceNotFound:
-            LOG.info(
+            LOG.debug(
                 "[ksg on_present] ep for ksg not found: %s/%s",
                 namespace,
-                ep_name,
+                name,
             )
             return
 
@@ -87,40 +79,38 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
                     pod_name = address["targetRef"]["name"]
                 except KeyError:
                     continue
-                pod = self.k8s.get_object(
-                    "pods",
-                    namespace=namespace,
-                    name=pod_name,
-                )
+                try:
+                    pod = self.k8s.get_object(
+                        "pods",
+                        namespace=namespace,
+                        name=pod_name,
+                    )
+                except k_exc.K8sResourceNotFound:
+                    continue
                 with contextlib.suppress(os_exc.NotFoundException):
                     self._update_pod_vif_sgs(pod, sg_ids)
-                    LOG.info(
-                        "ksg crd applied to pod %s/%s: %s",
-                        namespace,
-                        pod["metadata"]["name"],
-                        sg_ids,
-                    )
 
     def on_finalize(self, ksg: dict, *_, **__):
-        ep_name = ksg["spec"]["endpointName"]
+        name = ksg["spec"]["endpointName"]
         namespace: str = ksg["metadata"]["namespace"]
 
         try:
             eps = self.k8s.get_object(
-                "endpoints", namespace=namespace, name=ep_name
+                "endpoints", namespace=namespace, name=name
             )
         except k_exc.K8sResourceNotFound:
-            LOG.info(
+            LOG.debug(
                 "[ksg on_finalize] ep for ksg not found: %s/%s",
                 namespace,
-                ep_name,
+                name,
             )
             self.k8s.remove_finalizer(ksg, constants.KURYRSECGROUP_FINALIZER)
+            LOG.info("ksg finalizer removed from ksg %s/%s", namespace, name)
             return
 
         for subset in eps["subsets"]:
             for address in subset["addresses"]:
-                pod = self.get_object(
+                pod = self.k8s.get_object(
                     "pods",
                     namespace=namespace,
                     name=address["targetRef"]["name"],
@@ -130,17 +120,19 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
 
         with contextlib.suppress(k_exc.K8sResourceNotFound):
             svc = self.k8s.get_object(
-                "services", namespace=namespace, name=ep_name
+                "services", namespace=namespace, name=name
             )
             self.k8s.remove_finalizer(svc, constants.KURYRSECGROUP_FINALIZER)
+            LOG.info("ksg finalizer removed from svc %s/%s", namespace, name)
 
         self.k8s.remove_finalizer(ksg, constants.KURYRSECGROUP_FINALIZER)
+        LOG.info("ksg finalizer removed from ksg %s/%s", namespace, name)
 
     def _update_pod_vif_sgs(self, pod: dict, sg_ids: [str]):
-        name = pod["metadata"]["name"]
+        pod_name = pod["metadata"]["name"]
         namespace = pod["metadata"]["namespace"]
 
-        kp = self.k8s.get_crd("kuryrports", namespace=namespace, name=name)
+        kp = self.k8s.get_crd("kuryrports", namespace=namespace, name=pod_name)
         vifs = kp["status"]["vifs"]
 
         sgs = {
@@ -153,12 +145,21 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
                 "versioned_object.data"
             ]["id"]
             network = self.os_net.find_network(network_id)
-            valid_sg_ids = [
+            valid_sg_ids = {
                 sg_id
                 for sg_id in sg_ids
                 if sgs[sg_id].project_id == network.project_id
-            ]
-            self.os_net.update_port(port_id, valid_sg_ids)
+            }
+            self.os_net.update_port(
+                port_id, security_groups=list(valid_sg_ids)
+            )
+            LOG.info(
+                "ksg applied to port %s in pod %s/%s: %s",
+                port_id,
+                namespace,
+                pod_name,
+                valid_sg_ids,
+            )
 
 
 class ServiceHandler(k8s_base.ResourceEventHandler):
@@ -170,10 +171,17 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         self.k8s = clients.get_kubernetes_client()
 
     def on_present(self, svc: dict, *_, **__):
+        name = svc["metadata"]["name"]
+        namespace = svc["metadata"]["namespace"]
         annotations = svc["metadata"].get("annotations", {})
 
         if constants.K8S_ANNOTATION_SECGROUP_CRD in annotations:
             self.k8s.add_finalizer(svc, constants.KURYRSECGROUP_FINALIZER)
+            LOG.info(
+                "ksg finalizer added to svc %s/%s",
+                namespace,
+                name,
+            )
 
     def on_finalize(self, svc: dict, *_, **__):
         name = svc["metadata"]["name"]
@@ -183,10 +191,15 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
             "finalizers", {}
         ):
             try:
-                self.k8s.del_crd("kuryrsecuritygroups", namespace, name)
+                self.k8s.del_crd(
+                    "kuryrsecuritygroups", namespace=namespace, name=name
+                )
+                LOG.info("ksg crd deleted: %s/%s", namespace, name)
             except k_exc.K8sResourceNotFound:
-                # should not happen, but let's brace ourselves
                 self.k8s.remove_finalizer(
                     svc, constants.KURYRSECGROUP_FINALIZER
+                )
+                LOG.info(
+                    "ksg finalizer removed from svc %s/%s", namespace, name
                 )
                 return
