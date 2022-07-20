@@ -74,7 +74,10 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
             return
 
         for subset in eps["subsets"]:
-            for address in subset["addresses"]:
+            addresses = subset.get("addresses", []) + subset.get(
+                "notReadyAddresses", []
+            )
+            for address in addresses:
                 try:
                     pod_name = address["targetRef"]["name"]
                 except KeyError:
@@ -109,7 +112,10 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
             return
 
         for subset in eps["subsets"]:
-            for address in subset["addresses"]:
+            addresses = subset.get("addresses", []) + subset.get(
+                "notReadyAddresses", []
+            )
+            for address in addresses:
                 pod = self.k8s.get_object(
                     "pods",
                     namespace=namespace,
