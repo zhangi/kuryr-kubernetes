@@ -59,7 +59,7 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
     def on_present(self, ksg: dict, *_, **__):
         name = ksg["spec"]["endpointName"]
         namespace = ksg["metadata"]["namespace"]
-        sg_ids: [str] = ksg["status"]["securityGroupIDs"]
+        sg_ids: [str] = ksg.get("status", {}).get("securityGroupIDs", [])
 
         try:
             eps = self.k8s.get_object(
@@ -73,15 +73,12 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
             )
             return
 
-        for subset in eps["subsets"]:
+        for subset in eps.get("subsets", []):
             addresses = subset.get("addresses", []) + subset.get(
                 "notReadyAddresses", []
             )
             for address in addresses:
-                try:
-                    pod_name = address["targetRef"]["name"]
-                except KeyError:
-                    continue
+                pod_name = address.get("targetRef", {}).get("name", "")
                 try:
                     pod = self.k8s.get_object(
                         "pods",
@@ -96,33 +93,6 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
     def on_finalize(self, ksg: dict, *_, **__):
         name = ksg["spec"]["endpointName"]
         namespace: str = ksg["metadata"]["namespace"]
-
-        try:
-            eps = self.k8s.get_object(
-                "endpoints", namespace=namespace, name=name
-            )
-        except k_exc.K8sResourceNotFound:
-            LOG.debug(
-                "[ksg on_finalize] ep for ksg not found: %s/%s",
-                namespace,
-                name,
-            )
-            self.k8s.remove_finalizer(ksg, constants.KURYRSECGROUP_FINALIZER)
-            LOG.info("ksg finalizer removed from ksg %s/%s", namespace, name)
-            return
-
-        for subset in eps["subsets"]:
-            addresses = subset.get("addresses", []) + subset.get(
-                "notReadyAddresses", []
-            )
-            for address in addresses:
-                pod = self.k8s.get_object(
-                    "pods",
-                    namespace=namespace,
-                    name=address["targetRef"]["name"],
-                )
-                with contextlib.suppress(os_exc.NotFoundException):
-                    self._update_pod_vif_sgs(pod, [])
 
         with contextlib.suppress(k_exc.K8sResourceNotFound):
             svc = self.k8s.get_object(
@@ -139,7 +109,7 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
         namespace = pod["metadata"]["namespace"]
 
         kp = self.k8s.get_crd("kuryrports", namespace=namespace, name=pod_name)
-        vifs = kp["status"]["vifs"]
+        vifs = kp.get("status", {}).get("vifs", {})
 
         sgs = {
             sg_id: self.os_net.find_security_group(sg_id) for sg_id in sg_ids
@@ -147,14 +117,12 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
 
         for name, vif in vifs.items():
             port_id = vif["vif"]["versioned_object.data"]["id"]
-            network_id = vif["vif"]["versioned_object.data"]["network"][
-                "versioned_object.data"
-            ]["id"]
-            network = self.os_net.find_network(network_id)
+            port = self.os_net.get_port(port_id)
+
             valid_sg_ids = {
                 sg_id
                 for sg_id in sg_ids
-                if sgs[sg_id].project_id == network.project_id
+                if sgs[sg_id] and sgs[sg_id].project_id == port.project_id
             }
             self.os_net.update_port(
                 port_id, security_groups=list(valid_sg_ids)
