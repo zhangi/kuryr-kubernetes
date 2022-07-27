@@ -286,8 +286,9 @@ class CNIDaemonWatcherService(cotyledon.Service):
         kp_name = utils.get_res_unique_name(kuryrport)
         with lockutils.lock(kp_name, external=True):
             if (kp_name not in self.registry or
-                    self.registry[kp_name]['kp']['metadata']['uid']
-                    != kuryrport['metadata']['uid']):
+                    cni_utils.kuryr_ports_differ(
+                        self.registry[kp_name]['kp'],
+                        kuryrport)):
                 self.registry[kp_name] = {'kp': kuryrport,
                                           'vifs': vifs,
                                           'containerid': None,

@@ -39,6 +39,11 @@ def any_vif_inactive(vifs):
     return any(not vif.active for vif in vifs.values())
 
 
+def kuryr_ports_differ(kp, cached_kp):
+    uidDiffer = kp['metadata']['uid'] != cached_kp['metadata']['uid']
+    versionDiffer = kp['metadata']['resourceVersion'] != cached_kp['metadata']['resourceVersion']
+    return uidDiffer or versionDiffer
+
 class CNIConfig(dict):
     def __init__(self, cfg):
         super(CNIConfig, self).__init__(cfg)

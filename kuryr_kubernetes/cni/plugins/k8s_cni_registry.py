@@ -67,11 +67,14 @@ class K8sCNIRegistryPlugin(base_cni.CNIPlugin):
                     LOG.exception('Error when getting KuryrPort %s', kp_name)
                     raise exceptions.ResourceNotReady(kp_name)
 
-                if kp['metadata']['uid'] != cached_kp['metadata']['uid']:
+                if utils.kuryr_ports_differ(kp, cached_kp):
                     LOG.warning('Stale KuryrPort %s detected in cache. (API '
-                                'uid=%s, cached uid=%s). Removing it from '
+                                'uid=%s %s, cached uid=%s %s). Removing it from '
                                 'cache.', kp_name, kp['metadata']['uid'],
-                                cached_kp['metadata']['uid'])
+                                kp['metadata']['resourceVersion'],
+                                cached_kp['metadata']['uid'],
+                                cached_kp['metadata']['resourceVersion'],
+                                )
                     del self.registry[kp_name]
 
         vifs = self._do_work(params, b_base.connect, timeout)
