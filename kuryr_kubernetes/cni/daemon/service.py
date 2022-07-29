@@ -285,15 +285,16 @@ class CNIDaemonWatcherService(cotyledon.Service):
     def on_done(self, kuryrport, vifs):
         kp_name = utils.get_res_unique_name(kuryrport)
         with lockutils.lock(kp_name, external=True):
-            if (kp_name not in self.registry or
-                    cni_utils.kuryr_ports_differ(
-                        self.registry[kp_name]['kp'],
-                        kuryrport)):
+            if kp_name not in self.registry:
                 self.registry[kp_name] = {'kp': kuryrport,
                                           'vifs': vifs,
                                           'containerid': None,
                                           'vif_unplugged': False,
                                           'del_received': False}
+            elif cni_utils.kuryr_ports_differ(
+                self.registry[kp_name]['kp'], kuryrport):
+                self.registry[kp_name]['kp'] = kuryrport
+                self.registry[kp_name]['vifs'] = vifs
             else:
                 old_vifs = self.registry[kp_name]['vifs']
                 for iface in vifs:
