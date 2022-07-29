@@ -291,17 +291,11 @@ class CNIDaemonWatcherService(cotyledon.Service):
                                           'containerid': None,
                                           'vif_unplugged': False,
                                           'del_received': False}
-            elif cni_utils.kuryr_ports_differ(
-                self.registry[kp_name]['kp'], kuryrport):
-                self.registry[kp_name]['kp'] = kuryrport
-                self.registry[kp_name]['vifs'] = vifs
             else:
-                old_vifs = self.registry[kp_name]['vifs']
-                for iface in vifs:
-                    if old_vifs[iface].active != vifs[iface].active:
-                        kp_dict = self.registry[kp_name]
-                        kp_dict['vifs'] = vifs
-                        self.registry[kp_name] = kp_dict
+                kp_dict = self.registry[kp_name]
+                kp_dict['vifs'] = vifs
+                kp_dict['kp'] = kuryrport
+                self.registry[kp_name] = kp_dict
 
     def on_deleted(self, kp):
         kp_name = utils.get_res_unique_name(kp)
