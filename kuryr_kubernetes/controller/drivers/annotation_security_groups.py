@@ -18,6 +18,7 @@ from oslo_log import log as logging
 from kuryr_kubernetes import clients
 from kuryr_kubernetes import config
 from kuryr_kubernetes import constants
+from kuryr_kubernetes import exceptions as k_exc
 from kuryr_kubernetes.controller.drivers import base
 
 LOG = logging.getLogger(__name__)
@@ -75,13 +76,25 @@ class AnnotationPodSecurityGroupsDriver(base.PodSecurityGroupsDriver):
 class AnnotationServiceSecurityGroupsDriver(base.ServiceSecurityGroupsDriver):
     """Provides security groups for Service based on annotation."""
 
-    def get_security_groups(self, service, project_id):
+    def get_security_groups(self, service, project_id) -> [str]:
         LOG.debug(
             "AnnotationServiceSecurityGroupsDriver: "
             "svc: %s, "
             "annotations: %s",
             service['metadata']['name'],
             service['metadata'].get('annotations'))
+
+        k8s = clients.get_kubernetes_client()
+        try:
+            ksg = k8s.get_crd(
+                "kuryrsecuritygroups",
+                namespace=service['metadata']['namespace'],
+                name=service['metadata']['name'],
+            )
+            return ksg.get("status", {}).get("securityGroupIDs", [])
+        except k_exc.K8sResourceNotFound:
+            pass
+
         sg_id_list = list(config.CONF.neutron_defaults.pod_security_groups)
         try:
             annotations = service['metadata']['annotations']
