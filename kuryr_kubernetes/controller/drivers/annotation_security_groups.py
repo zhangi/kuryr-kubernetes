@@ -27,10 +27,24 @@ LOG = logging.getLogger(__name__)
 class AnnotationPodSecurityGroupsDriver(base.PodSecurityGroupsDriver):
     """Provides security groups for Pod based on annotation."""
 
-    def get_security_groups(self, pod, project_id):
+    def get_security_groups(self, pod, project_id) -> [str]:
         LOG.debug(
             "AnnotationPodSecurityGroupsDriver: pod: %s, annotations: %s",
             pod['metadata']['name'], pod['metadata'].get('annotations'))
+
+        if (ksg_name := pod['metadata']
+                .get('annotations', {})
+                .get(constants.K8S_ANNOTATION_SECGROUP_CRD, '')):
+            k8s = clients.get_kubernetes_client()
+            try:
+                ksg = k8s.get_crd(
+                    "kuryrsecuritygroups",
+                    namespace=pod['metadata']['namespace'],
+                    name=ksg_name,
+                )
+                return ksg.get("status", {}).get("securityGroupIDs", [])
+            except k_exc.K8sResourceNotFound:
+                pass
 
         sg_id_list = list(config.CONF.neutron_defaults.pod_security_groups)
         os_net = clients.get_network_client()
