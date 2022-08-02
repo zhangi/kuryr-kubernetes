@@ -32,6 +32,7 @@ class AnnotationPodSecurityGroupsDriver(base.PodSecurityGroupsDriver):
             "AnnotationPodSecurityGroupsDriver: pod: %s, annotations: %s",
             pod['metadata']['name'], pod['metadata'].get('annotations'))
 
+        tenant_sg_ids = None
         if (ksg_name := pod['metadata']
                 .get('annotations', {})
                 .get(constants.K8S_ANNOTATION_SECGROUP_CRD, '')):
@@ -42,20 +43,26 @@ class AnnotationPodSecurityGroupsDriver(base.PodSecurityGroupsDriver):
                     namespace=pod['metadata']['namespace'],
                     name=ksg_name,
                 )
-                return ksg.get("status", {}).get("securityGroupIDs", [])
+                tenant_sg_ids = ksg.get("status", {}).get(
+                        "securityGroupIDs", [])
             except k_exc.K8sResourceNotFound:
                 pass
 
-        sg_id_list = list(config.CONF.neutron_defaults.pod_security_groups)
-        os_net = clients.get_network_client()
-        try:
-            annotations = pod['metadata']['annotations']
-            groups = annotations[constants.K8S_ANNOTATION_SECGROUP]
-        except KeyError:
-            return sg_id_list
+        if tenant_sg_ids is None:
+            os_net = clients.get_network_client()
+            try:
+                annotations = pod['metadata']['annotations']
+                tenant_sg_ids = annotations[
+                        constants.K8S_ANNOTATION_SECGROUP].split(',')
+            except KeyError:
+                pass
+
+        if tenant_sg_ids is None:
+            return list(config.CONF.neutron_defaults.pod_security_groups)
+
         sg_id_list = []
-        for group in groups.split(','):
-            sg = os_net.find_security_group(group)
+        for sg_id in tenant_sg_ids:
+            sg = os_net.find_security_group(sg_id)
             if sg and sg.project_id == project_id:
                 sg_id_list.append(sg.id)
         LOG.debug("AnnotationPodSecurityGroupsDriver: sg_id_list: %s",
@@ -98,28 +105,33 @@ class AnnotationServiceSecurityGroupsDriver(base.ServiceSecurityGroupsDriver):
             service['metadata']['name'],
             service['metadata'].get('annotations'))
 
-        k8s = clients.get_kubernetes_client()
+        tenant_sg_ids = None
         try:
+            k8s = clients.get_kubernetes_client()
             ksg = k8s.get_crd(
                 "kuryrsecuritygroups",
                 namespace=service['metadata']['namespace'],
                 name=service['metadata']['name'],
             )
-            return ksg.get("status", {}).get("securityGroupIDs", [])
+            tenant_sg_ids = ksg.get("status", {}).get("securityGroupIDs", [])
         except k_exc.K8sResourceNotFound:
             pass
 
-        sg_id_list = list(config.CONF.neutron_defaults.pod_security_groups)
-        try:
-            annotations = service['metadata']['annotations']
-            groups = annotations[constants.K8S_ANNOTATION_SECGROUP]
-        except KeyError:
-            return sg_id_list
+        if tenant_sg_ids is None:
+            try:
+                annotations = service['metadata']['annotations']
+                tenant_sg_ids = annotations[
+                        constants.K8S_ANNOTATION_SECGROUP].split(',')
+            except KeyError:
+                pass
+
+        if tenant_sg_ids is None:
+            return list(config.CONF.neutron_defaults.pod_security_groups)
 
         sg_id_list = []
         os_net = clients.get_network_client()
-        for group in groups.split(','):
-            sg = os_net.find_security_group(group)
+        for sg_id in tenant_sg_ids:
+            sg = os_net.find_security_group(sg_id)
             if sg:
                 sg_id_list.append(sg.id)
         LOG.debug("AnnotationServiceSecurityGroupsDriver: sg_id_list: %s",
