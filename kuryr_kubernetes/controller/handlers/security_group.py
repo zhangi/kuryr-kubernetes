@@ -1,4 +1,5 @@
 import contextlib
+from typing import List
 from openstack import exceptions as os_exc
 
 from kuryr_kubernetes import utils
@@ -59,7 +60,7 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
     def on_present(self, ksg: dict, *_, **__):
         name = ksg["spec"]["endpointName"]
         namespace = ksg["metadata"]["namespace"]
-        sg_ids: [str] = ksg.get("status", {}).get("securityGroupIDs", [])
+        sg_ids: List[str] = ksg.get("status", {}).get("securityGroupIDs", [])
 
         try:
             eps = self.k8s.get_object(
@@ -104,7 +105,7 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
         self.k8s.remove_finalizer(ksg, constants.KURYRSECGROUP_FINALIZER)
         LOG.info("ksg finalizer removed from ksg %s/%s", namespace, name)
 
-    def _update_pod_vif_sgs(self, pod: dict, sg_ids: [str]):
+    def _update_pod_vif_sgs(self, pod: dict, sg_ids: List[str]):
         pod_name = pod["metadata"]["name"]
         namespace = pod["metadata"]["namespace"]
 
@@ -115,7 +116,7 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
             sg_id: self.os_net.find_security_group(sg_id) for sg_id in sg_ids
         }
 
-        for name, vif in vifs.items():
+        for _, vif in vifs.items():
             port_id = vif["vif"]["versioned_object.data"]["id"]
             port = self.os_net.get_port(port_id)
 
@@ -150,12 +151,14 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         annotations = svc["metadata"].get("annotations", {})
 
         if constants.K8S_ANNOTATION_SECGROUP_CRD in annotations:
-            self.k8s.add_finalizer(svc, constants.KURYRSECGROUP_FINALIZER)
-            LOG.info(
-                "ksg finalizer added to svc %s/%s",
-                namespace,
-                name,
-            )
+            svc_finalizers = svc["metadata"].get("finalizers", {})
+            if constants.KURYRSECGROUP_FINALIZER not in svc_finalizers:
+                self.k8s.add_finalizer(svc, constants.KURYRSECGROUP_FINALIZER)
+                LOG.info(
+                    "ksg finalizer added to svc %s/%s",
+                    namespace,
+                    name,
+                )
 
     def on_finalize(self, svc: dict, *_, **__):
         name = svc["metadata"]["name"]
