@@ -203,6 +203,15 @@ class KuryrPortHandler(k8s_base.ResourceEventHandler):
             self.k8s.remove_finalizer(kuryrport_crd,
                                       constants.KURYRPORT_FINALIZER)
             raise
+        crd_uri = KURYRPORT_URI.format(
+            ns=kuryrport_crd["metadata"]["namespace"],
+            crd=kuryrport_crd["metadata"]["name"])
+        kuryrport_crd = self.k8s.get(crd_uri)
+        if kuryrport_crd['status']['vifs']:
+            LOG.warning("stale kuryrport %s/%s",
+                        kuryrport_crd["metadata"]["namespace"],
+                        kuryrport_crd["metadata"]["name"])
+            return True
 
         project_id = self._drv_project.get_project(pod)
         security_groups = self._drv_sg.get_security_groups(pod, project_id)
