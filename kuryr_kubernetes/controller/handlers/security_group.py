@@ -151,14 +151,7 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         annotations = svc["metadata"].get("annotations", {})
 
         if constants.K8S_ANNOTATION_SECGROUP_CRD in annotations:
-            svc_finalizers = svc["metadata"].get("finalizers", {})
-            if constants.KURYRSECGROUP_FINALIZER not in svc_finalizers:
-                self.k8s.add_finalizer(svc, constants.KURYRSECGROUP_FINALIZER)
-                LOG.info(
-                    "ksg finalizer added to svc %s/%s",
-                    namespace,
-                    name,
-                )
+            self.k8s.add_finalizer(svc, constants.KURYRSECGROUP_FINALIZER)
 
     def on_finalize(self, svc: dict, *_, **__):
         name = svc["metadata"]["name"]
