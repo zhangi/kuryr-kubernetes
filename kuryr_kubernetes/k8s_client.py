@@ -156,6 +156,18 @@ class K8sClient(object):
 
         return result
 
+    def get_object(self, type: str, *, namespace: str, name: str):
+        return self.get(f'{constants.K8S_API_NAMESPACES}'
+                        f'/{namespace}/{type}/{name}')
+
+    def get_crd(self, type: str, *, namespace: str, name: str):
+        return self.get(f'{constants.K8S_API_CRD_NAMESPACES}'
+                        f'/{namespace}/{type}/{name}')
+
+    def del_crd(self, type: str, *, namespace: str, name: str):
+        return self.delete(f'{constants.K8S_API_CRD_NAMESPACES}'
+                           f'/{namespace}/{type}/{name}')
+
     def _get_url_and_header(self, path, content_type):
         url = self._base_url + path
         header = {'Content-Type': content_type,

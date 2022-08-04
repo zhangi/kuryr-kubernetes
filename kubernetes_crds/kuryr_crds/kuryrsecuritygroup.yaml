@@ -1,0 +1,47 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: kuryrsecuritygroups.openstack.org
+spec:
+  group: openstack.org
+  scope: Namespaced
+  names:
+    plural: kuryrsecuritygroups
+    singular: kuryrsecuritygroup
+    kind: KuryrSecurityGroup
+    shortNames:
+      - ksg
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+
+            spec:
+              type: object
+              properties:
+                securityGroupIDs:
+                  type: array
+                  items:
+                    type: string
+                endpointSubsets:
+                  type: array
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+
+            status:
+              type: object
+              properties:
+                securityGroupIDs:
+                  type: array
+                  items:
+                    type: string
+                endpointSubsets:
+                  type: array
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
