@@ -133,14 +133,22 @@ class SecurityGroupHandler(k8s_base.ResourceEventHandler):
                 "services", namespace=namespace, name=name
             )
             self.k8s.remove_finalizer(svc, constants.KURYRSECGROUP_FINALIZER)
-            LOG.info("ksg finalizer removed from svc %s/%s", namespace, name)
+            LOG.info(
+                "[ksg on_finalize] ksg finalizer removed from svc %s/%s",
+                namespace,
+                name,
+            )
         except k_exc.K8sResourceNotFound:
             LOG.debug(
                 "svc not found for ksg on_finalize: %s/%s", namespace, name
             )
 
         self.k8s.remove_finalizer(ksg, constants.KURYRSECGROUP_FINALIZER)
-        LOG.info("ksg finalizer removed from ksg %s/%s", namespace, name)
+        LOG.info(
+            "[ksg on_finalize] ksg finalizer removed from ksg %s/%s",
+            namespace,
+            name,
+        )
 
     def _update_pod_vif_sgs(self, pod: dict, sg_ids: List[str]):
         pod_name = pod["metadata"]["name"]
@@ -199,12 +207,16 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
                 self.k8s.del_crd(
                     "kuryrsecuritygroups", namespace=namespace, name=name
                 )
-                LOG.info("ksg crd deleted: %s/%s", namespace, name)
+                LOG.info(
+                    "[svc on_finalize] ksg crd deleted: %s/%s", namespace, name
+                )
             except k_exc.K8sResourceNotFound:
                 self.k8s.remove_finalizer(
                     svc, constants.KURYRSECGROUP_FINALIZER
                 )
                 LOG.info(
-                    "ksg finalizer removed from svc %s/%s", namespace, name
+                    "[svc on_finalize] ksg finalizer removed from svc %s/%s",
+                    namespace,
+                    name,
                 )
                 return
