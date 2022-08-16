@@ -751,6 +751,14 @@ class LBaaSv2Driver(base.LBaaSDriver):
 
         return member
 
+    def get_pool_members(self, pool):
+        lbaas = clients.get_loadbalancer_client()
+        response = lbaas.members(
+            pool['id'],
+            project_id=pool['project_id'])
+
+        return list(response)
+
     def _ensure(self, create, find, obj, loadbalancer, update=None):
         try:
             result = create(obj)

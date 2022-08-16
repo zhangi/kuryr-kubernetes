@@ -558,6 +558,14 @@ class LBaaSDriver(DriverBase):
         :param svc_name: K8S service's name
         """
         raise NotImplementedError()
+    
+    @abc.abstractmethod
+    def get_pool_members(self, pool_id):
+        """Get members of a load balancer pool.
+
+        :param pool_id: Octavia id of load balancer pool
+        """
+        raise NotImplementedError()
 
     @abc.abstractmethod
     def release_pool(self, loadbalancer, pool):

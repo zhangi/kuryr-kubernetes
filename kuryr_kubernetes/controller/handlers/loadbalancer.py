@@ -252,8 +252,40 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
         if (self._has_endpoints(loadbalancer_crd) and
                 self._add_new_members(loadbalancer_crd)):
             changed = True
-
+        if not changed:
+            if not loadbalancer_crd['status'].get('skip_member_reconciliation'):
+                self._reconcile_members(loadbalancer_crd)
         return changed
+
+    def _reconcile_members(self, loadbalancer_crd):
+        members= []
+        for pool in loadbalancer_crd['status']['pools']:
+            pool_members = self._drv_lbaas.get_pool_members(pool)
+            for member in pool_members:
+                members.append({
+                    'id': member.id,
+                    'name': member.name,
+                    'project_id': member.project_id,
+                    'pool_id': member.pool_id,
+                    'subnet_id': member.subnet_id,
+                    'ip': member.address,
+                    'port': member.protocol_port,
+                    })
+        klb_members = set(m['id'] for m in loadbalancer_crd['status']['members'])
+        octavia_members = set(m['id'] for m in members)
+        common_members = klb_members.intersection(octavia_members)
+        diverged = len(klb_members) != len(octavia_members)
+        diverged |= len(klb_members) != len(common_members)
+        if diverged:
+            loadbalancer_crd['status']['members'] = members
+            LOG.warning("klb members diverged: %s/%s, adding: %s, removing: %s", 
+                        loadbalancer_crd['metadata']['namespace'],
+                        loadbalancer_crd['metadata']['name'],
+                        octavia_members.difference(klb_members),
+                        klb_members.difference(octavia_members),
+                     )
+        loadbalancer_crd['status']['skip_member_reconciliation'] = True
+        self._patch_status(loadbalancer_crd)
 
     def _sync_lbaas_sgs(self, klb_crd):
         lb = klb_crd['status'].get('loadbalancer')
@@ -379,6 +411,10 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
                     else:
                         listener_port = None
                     loadbalancer = loadbalancer_crd['status']['loadbalancer']
+                    if loadbalancer_crd['status'].get('skip_member_reconciliation'):
+                        loadbalancer_crd['status']['skip_member_reconciliation'] = False
+                        if not self._patch_status(loadbalancer_crd):
+                            return False
                     member = self._drv_lbaas.ensure_member(
                         loadbalancer=loadbalancer,
                         pool=pool,
@@ -496,7 +532,10 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
             if ((str(member['ip']), pod_name, member['port'], member[
                     'pool_id']) in current_targets):
                 continue
-
+            if loadbalancer_crd['status'].get('skip_member_reconciliation'):
+                loadbalancer_crd['status']['skip_member_reconciliation'] = False
+                if not self._patch_status(loadbalancer_crd):
+                    return False
             self._drv_lbaas.release_member(loadbalancer_crd['status'][
                 'loadbalancer'], member)
             removed_ids.add(member['id'])

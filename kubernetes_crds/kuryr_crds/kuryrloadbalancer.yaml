@@ -117,6 +117,8 @@ spec:
           status:
             type: object
             properties:
+              skip_member_reconciliation:
+                type: boolean
               listeners:
                 type: array
                 items:
