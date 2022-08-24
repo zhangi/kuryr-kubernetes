@@ -55,7 +55,7 @@ class NeutronPodVIFDriver(base.PodVIFDriver):
         with lockutils.lock(group):
             t_beg = time.time()
             port = os_net.create_port(**rq)
-            LOG.info("create port: %.2fs, %s", time.time()-t_beg, port.id)
+            LOG.info("create_port: %.2fs, %s", time.time()-t_beg, port.id)
 
         self._check_port_binding([port])
         if not self._tag_on_creation:
@@ -100,7 +100,7 @@ class NeutronPodVIFDriver(base.PodVIFDriver):
         with lockutils.lock(group):
             t_beg = time.time()
             clients.get_network_client().delete_port(vif.id)
-            LOG.info("delete port: %.2fs, %s", time.time()-t_beg, vif.id)
+            LOG.info("delete_port: %.2fs, %s", time.time()-t_beg, vif.id)
 
     def activate_vif(self, vif, **kwargs):
         if vif.active:

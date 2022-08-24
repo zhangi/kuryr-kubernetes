@@ -229,9 +229,19 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         # recalculation.
         self._bump_network_policies(service)
         try:
+            watch = utils.PerfWatch()
             k8s.delete(klb_crd_path)
+            LOG.info("delete_klb %.2fs %s/%s",
+                     watch.elapsed(),
+                     service['metadata']['namespace'],
+                     service['metadata']['name'])
         except k_exc.K8sResourceNotFound:
+            watch = utils.PerfWatch()
             k8s.remove_finalizer(service, k_const.SERVICE_FINALIZER)
+            LOG.info("remove_service_finalizer %.2fs %s/%s",
+                     watch.elapsed(),
+                     service['metadata']['namespace'],
+                     service['metadata']['name'])
 
         annotations = service['metadata'].get('annotations', {})
         x_svc_name = annotations.get(k_const.K8S_ANNOTATION_X_SVC_NAME)
@@ -240,11 +250,19 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
         if x_svc_name:
             # service is the 'native' k8s service created by k8s
             try:
+                watch = utils.PerfWatch()
                 k8s.delete(f"{k_const.K8S_API_NAMESPACES}"
                            f"/{namespace}/services/{x_svc_name}")
+                LOG.info("delete_x_service %.2fs %s/%s",
+                         watch.elapsed(), namespace, x_svc_name)
             except k_exc.K8sResourceNotFound:
+                watch = utils.PerfWatch()
                 k8s.remove_finalizer(
                     service, k_const.SERVICE_X_FINALIZER)
+                LOG.info("remove_service_x_finalizer %.2fs %s/%s",
+                         watch.elapsed(),
+                         service['metadata']['namespace'],
+                         service['metadata']['name'])
         elif svc_name:
             # service is the 'shadow' k8s service created by cni
             # so we need to find the 'native' service and remove
@@ -258,8 +276,11 @@ class ServiceHandler(k8s_base.ResourceEventHandler):
 
             LOG.debug('Removing finalizer from service %s',
                       svc["metadata"]["name"])
+            watch = utils.PerfWatch()
             k8s.remove_finalizer(
                 svc, k_const.SERVICE_X_FINALIZER)
+            LOG.info("remove_service_x_finalizer %.2fs %s/%s",
+                     watch.elapsed(), namespace, svc_name)
 
     def _has_clusterip(self, service):
         # ignore headless service, clusterIP is None
