@@ -103,6 +103,17 @@ class VIFHandler(k8s_base.ResourceEventHandler):
 
     def on_finalize(self, pod, *args, **kwargs):
         k8s = clients.get_kubernetes_client()
+        pod_ns = pod["metadata"]["namespace"]
+        pod_name = pod["metadata"]["name"]
+        pod_uid = pod["metadata"]["uid"]
+        try:
+            pod = self.k8s.get(f"{constants.K8S_API_NAMESPACES}"
+                               f"/{pod_ns}/pods/{pod_name}")
+        except k_exc.K8sResourceNotFound:
+            return
+        if pod["metadata"]["uid"] != pod_uid:
+            LOG.warning("stale pod %s/%s", pod_ns, pod_name)
+            return
 
         try:
             kp = k8s.get(KURYRPORT_URI.format(ns=pod["metadata"]["namespace"],
