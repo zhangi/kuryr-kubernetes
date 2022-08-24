@@ -107,8 +107,8 @@ class VIFHandler(k8s_base.ResourceEventHandler):
         pod_name = pod["metadata"]["name"]
         pod_uid = pod["metadata"]["uid"]
         try:
-            pod = self.k8s.get(f"{constants.K8S_API_NAMESPACES}"
-                               f"/{pod_ns}/pods/{pod_name}")
+            pod = k8s.get(f"{constants.K8S_API_NAMESPACES}"
+                          f"/{pod_ns}/pods/{pod_name}")
         except k_exc.K8sResourceNotFound:
             return
         if pod["metadata"]["uid"] != pod_uid:
