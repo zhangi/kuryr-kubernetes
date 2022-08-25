@@ -76,7 +76,7 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
             return
 
         crd_lb = loadbalancer_crd['status'].get('loadbalancer')
-        LOG.debug("KuryrLoadBalancerHandler on_present, crd_lb: %s",crd_lb)
+        LOG.debug("KuryrLoadBalancerHandler on_present, crd_lb: %s", crd_lb)
         if crd_lb:
             lb_provider = crd_lb.get('provider')
             spec_lb_provider = loadbalancer_crd['spec'].get('provider')
@@ -97,7 +97,7 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
             # associate it to LB VIP and update K8S service status
             lb_ip = loadbalancer_crd['spec'].get('lb_ip')
             pub_info = loadbalancer_crd['status'].get(
-                    'service_pub_ip_info')
+                'service_pub_ip_info')
             if pub_info is None and loadbalancer_crd['spec'].get('type'):
                 service_pub_ip_info = (
                     self._drv_service_pub_ip.acquire_service_pub_ip_info(
@@ -131,8 +131,8 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
         # get the loadbalancers id in the CRD status
         crd_loadbalancer_ids = [{'id': loadbalancer_crd.get('status', {}).get(
                                 'loadbalancer', {}).get('id', {}), 'selflink':
-                                utils.get_res_link(loadbalancer_crd)} for
-                                loadbalancer_crd in loadbalancer_crds]
+            utils.get_res_link(loadbalancer_crd)} for
+            loadbalancer_crd in loadbalancer_crds]
         lbaas = clients.get_loadbalancer_client()
         lbaas_spec = {}
         self._drv_lbaas.add_tags('loadbalancer', lbaas_spec)
@@ -333,11 +333,13 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
                         target_namespace = target_ref['namespace']
                     # Avoid to point to a Pod on hostNetwork
                     # that isn't the one to be added as Member.
+                    target_pod = {}
                     if not target_ref and utils.get_subnet_by_ip(
                             self._get_nodes_subnets(),
                             target_ip):
                         target_pod = {}
-                    else:
+                    elif (CONF.octavia_defaults.member_mode 
+                          == k_const.OCTAVIA_L2_MEMBER_MODE):
                         target_pod = utils.get_pod_by_ip(
                             target_ip, target_namespace)
                 except KeyError:
