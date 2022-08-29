@@ -70,6 +70,14 @@ def get_kuryrport(pod):
     except k_exc.K8sResourceNotFound:
         return None
 
+def get_kuryrloadbalancer(ns, name):
+    k8s = clients.get_kubernetes_client()
+    try:
+        return k8s.get(f'{constants.K8S_API_CRD_NAMESPACES}/'
+                       f'{ns}/kuryrloadbalancers/'
+                       f'{name}')
+    except k_exc.K8sResourceNotFound:
+        return None
 
 def get_vifs(pod):
     kp = get_kuryrport(pod)

@@ -59,6 +59,17 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
             self._drv_nodes_subnets.get_nodes_subnets())
 
     def on_present(self, loadbalancer_crd, *args, **kwargs):
+        klb_ns = loadbalancer_crd['metadata']['namespace']
+        klb_name = loadbalancer_crd['metadata']['name']
+        klb_version = ['metadata']['resourceVersion']
+        loadbalancer_crd = driver_utils.get_kuryrloadbalancer(
+            klb_ns, klb_name)
+        if not loadbalancer_crd:
+            LOG.warn("klb not found: %s/%s", klb_ns, klb_name)
+            return
+        if loadbalancer_crd['metadata']['resourceVersion'] != klb_version:
+            LOG.warn("stale klb %s/%s", klb_ns, klb_name)
+
         if loadbalancer_crd.get('status', None) is None:
             kubernetes = clients.get_kubernetes_client()
             try:
@@ -338,7 +349,7 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
                             self._get_nodes_subnets(),
                             target_ip):
                         target_pod = {}
-                    elif (CONF.octavia_defaults.member_mode 
+                    elif (CONF.octavia_defaults.member_mode
                           == k_const.OCTAVIA_L2_MEMBER_MODE):
                         target_pod = utils.get_pod_by_ip(
                             target_ip, target_namespace)
