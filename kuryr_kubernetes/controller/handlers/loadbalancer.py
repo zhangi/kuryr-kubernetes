@@ -61,7 +61,7 @@ class KuryrLoadBalancerHandler(k8s_base.ResourceEventHandler):
     def on_present(self, loadbalancer_crd, *args, **kwargs):
         klb_ns = loadbalancer_crd['metadata']['namespace']
         klb_name = loadbalancer_crd['metadata']['name']
-        klb_version = ['metadata']['resourceVersion']
+        klb_version = loadbalancer_crd['metadata']['resourceVersion']
         loadbalancer_crd = driver_utils.get_kuryrloadbalancer(
             klb_ns, klb_name)
         if not loadbalancer_crd:
